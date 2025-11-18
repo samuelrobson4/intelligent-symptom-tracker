@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { extractMetadata } from './claudeService';
+import { processMessageWithRetry } from './claudeService';
 import { ExtractionResponse } from './types';
 
 export function TestHarness() {
@@ -22,7 +22,7 @@ export function TestHarness() {
     setResult(null);
 
     try {
-      const response = await extractMetadata(input);
+      const response = await processMessageWithRetry(input);
       setResult(response);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error occurred');

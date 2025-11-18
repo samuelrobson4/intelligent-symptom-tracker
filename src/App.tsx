@@ -1,7 +1,7 @@
-import { TestHarness } from './TestHarness';
+import { TestHarnessWithOPQRST } from './TestHarnessWithOPQRST';
 
 function App() {
-  return <TestHarness />;
+  return <TestHarnessWithOPQRST />;
 }
 
 export default App;
