@@ -3,7 +3,7 @@
  * Ensures Claude's responses conform to controlled vocabularies
  */
 
-import { Location, Duration, SymptomMetadata, ValidationResult } from './types';
+import { Location, SymptomMetadata, ValidationResult } from './types';
 
 /**
  * Check if a value is a valid Location enum value
@@ -12,16 +12,6 @@ function isValidLocation(value: unknown): value is Location {
   return (
     typeof value === 'string' &&
     Object.values(Location).includes(value as Location)
-  );
-}
-
-/**
- * Check if a value is a valid Duration enum value
- */
-function isValidDuration(value: unknown): value is Duration {
-  return (
-    typeof value === 'string' &&
-    Object.values(Duration).includes(value as Duration)
   );
 }
 
@@ -38,8 +28,31 @@ function isValidSeverity(value: unknown): value is number {
 }
 
 /**
+ * Check if a value is a valid ISO date string (YYYY-MM-DD)
+ */
+function isValidOnsetDate(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+
+  // Check format YYYY-MM-DD
+  const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!isoDateRegex.test(value)) return false;
+
+  // Check if it's a valid date
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return false;
+
+  // Check if the date isn't in the future
+  const today = new Date();
+  today.setHours(23, 59, 59, 999); // End of today
+  if (date > today) return false;
+
+  return true;
+}
+
+/**
  * Parse and validate symptom metadata from Claude's response
  * Returns either validated data or an error message
+ * Note: Fields can be null if not yet collected in conversation
  */
 export function parseAndValidate(data: unknown): ValidationResult {
   try {
@@ -65,37 +78,37 @@ export function parseAndValidate(data: unknown): ValidationResult {
 
     const metadata = response.metadata as Record<string, unknown>;
 
-    // Validate location
-    if (!isValidLocation(metadata.location)) {
+    // Validate location (allow null during conversation)
+    if (metadata.location !== null && !isValidLocation(metadata.location)) {
       return {
         success: false,
         error: 'Invalid location',
-        message: `Location must be one of: ${Object.values(Location).join(', ')}. Received: ${metadata.location}`,
+        message: `Location must be one of: ${Object.values(Location).join(', ')}, or null. Received: ${metadata.location}`,
       };
     }
 
-    // Validate duration (optional in some cases)
-    if (metadata.duration !== undefined && !isValidDuration(metadata.duration)) {
+    // Validate onset (allow null during conversation)
+    if (metadata.onset !== null && !isValidOnsetDate(metadata.onset)) {
       return {
         success: false,
-        error: 'Invalid duration',
-        message: `Duration must be one of: ${Object.values(Duration).join(', ')}. Received: ${metadata.duration}`,
+        error: 'Invalid onset',
+        message: `Onset must be a valid ISO date (YYYY-MM-DD) not in the future, or null. Received: ${metadata.onset}`,
       };
     }
 
-    // Validate severity (optional in some cases)
-    if (metadata.severity !== undefined && !isValidSeverity(metadata.severity)) {
+    // Validate severity (allow null during conversation)
+    if (metadata.severity !== null && !isValidSeverity(metadata.severity)) {
       return {
         success: false,
         error: 'Invalid severity',
-        message: `Severity must be an integer between 0 and 10. Received: ${metadata.severity}`,
+        message: `Severity must be an integer between 0 and 10, or null. Received: ${metadata.severity}`,
       };
     }
 
     // Build validated metadata object
     const validatedMetadata: SymptomMetadata = {
-      location: metadata.location,
-      duration: metadata.duration as Duration,
+      location: metadata.location as Location,
+      onset: metadata.onset as string,
       severity: metadata.severity as number,
       description: typeof metadata.description === 'string' ? metadata.description : undefined,
     };
@@ -142,9 +155,9 @@ export function generateErrorFeedback(validationResult: ValidationResult): strin
   feedback += '\n1. Is valid JSON';
   feedback += '\n2. Contains a "metadata" object';
   feedback += '\n3. Uses only allowed values from the controlled vocabularies';
-  feedback += `\n   - Location: ${Object.values(Location).join(', ')}`;
-  feedback += `\n   - Duration: ${Object.values(Duration).join(', ')}`;
-  feedback += '\n   - Severity: integer from 0 to 10';
+  feedback += `\n   - Location: ${Object.values(Location).join(', ')} (or null if not yet known)`;
+  feedback += '\n   - Onset: ISO date YYYY-MM-DD not in the future (or null if not yet known)';
+  feedback += '\n   - Severity: integer from 0 to 10 (or null if not yet known)';
 
   return feedback;
 }

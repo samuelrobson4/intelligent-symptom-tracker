@@ -3,8 +3,8 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { ExtractionResponse } from './types';
-import { BASE_EXTRACTION_PROMPT, RETRY_PROMPT } from './promptTemplates';
+import { ExtractionResponse, OPQRSTResponses } from './types';
+import { CONVERSATIONAL_PROMPT, RETRY_PROMPT } from './promptTemplates';
 import { parseAndValidate, generateErrorFeedback } from './validators';
 
 const API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
@@ -205,4 +205,123 @@ export async function collectOPQRSTResponse(
     console.error('Error collecting OPQRST response:', error);
     throw error;
   }
+}
+
+/**
+ * Process a conversational message and extract/update symptom metadata
+ * This function maintains conversation context and gradually builds up the symptom data
+ */
+export interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ConversationResult {
+  extractedData: ExtractionResponse;
+  secondaryResponses: OPQRSTResponses;
+}
+
+export async function processChatMessage(
+  conversationHistory: ConversationMessage[],
+  userMessage: string,
+  maxRetries: number = 3
+): Promise<ConversationResult> {
+  let lastError: string = '';
+
+  // Build the conversation context for Claude
+  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+
+  // Add the system prompt as the first user message
+  messages.push({
+    role: 'user',
+    content: CONVERSATIONAL_PROMPT,
+  });
+
+  // Add conversation history
+  for (const msg of conversationHistory) {
+    messages.push({
+      role: msg.role,
+      content: msg.content,
+    });
+  }
+
+  // Add the new user message
+  messages.push({
+    role: 'user',
+    content: userMessage,
+  });
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await client.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2048,
+        messages: messages,
+      });
+
+      const content = response.content[0];
+      if (content.type !== 'text') {
+        throw new Error('Unexpected response type from Claude');
+      }
+
+      let jsonText = content.text.trim();
+
+      // Remove markdown code blocks if present
+      if (jsonText.startsWith('```json')) {
+        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?$/g, '');
+      } else if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/```\n?/g, '').replace(/```\n?$/g, '');
+      }
+
+      // Parse the JSON response
+      const parsed = JSON.parse(jsonText);
+
+      // Validate the metadata (allowing null values during conversation)
+      const validationResult = parseAndValidate(parsed);
+
+      if (validationResult.success || attempt === maxRetries - 1) {
+        // Extract the data
+        const extractedData: ExtractionResponse = {
+          metadata: parsed.metadata,
+          aiMessage: parsed.aiMessage,
+          conversationComplete: parsed.conversationComplete || false,
+        };
+
+        const secondaryResponses: OPQRSTResponses = parsed.secondaryResponses || {};
+
+        return {
+          extractedData,
+          secondaryResponses,
+        };
+      }
+
+      // Validation failed, prepare for retry
+      lastError = validationResult.message || validationResult.error || 'Validation failed';
+      const errorFeedback = generateErrorFeedback(validationResult);
+
+      console.warn(`Attempt ${attempt + 1} failed validation:`, lastError);
+
+      // Add the failed response and error feedback to context
+      messages.push(
+        { role: 'assistant', content: jsonText },
+        { role: 'user', content: RETRY_PROMPT(errorFeedback) }
+      );
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Attempt ${attempt + 1} failed:`, lastError);
+
+      // For JSON parse errors or API errors, add retry prompt
+      if (attempt < maxRetries - 1) {
+        messages.push({
+          role: 'user',
+          content: RETRY_PROMPT(lastError),
+        });
+      }
+    }
+  }
+
+  // All retries failed - return a fallback response
+  throw new Error(
+    `Failed to get valid response after ${maxRetries} attempts. Last error: ${lastError}`
+  );
 }

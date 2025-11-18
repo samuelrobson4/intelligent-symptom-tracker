@@ -3,7 +3,7 @@
  * Determines when to ask follow-up questions and manages the question flow
  */
 
-import { SymptomMetadata, Location, Duration, OPQRSTResponses } from './types';
+import { SymptomMetadata, Location, OPQRSTResponses } from './types';
 import { OPQRST_QUESTIONS } from './promptTemplates';
 
 /**
@@ -12,11 +12,22 @@ import { OPQRST_QUESTIONS } from './promptTemplates';
 const CRITICAL_LOCATIONS = [Location.CHEST, Location.ABDOMEN, Location.HEAD];
 
 /**
+ * Calculate days since onset from ISO date string
+ */
+function getDaysSinceOnset(onsetDate: string): number {
+  const onset = new Date(onsetDate);
+  const today = new Date();
+  const diffTime = Math.abs(today.getTime() - onset.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+}
+
+/**
  * Determine if secondary OPQRST questions should be triggered
  *
  * Triggers when:
  * - Severity ≥ 7
- * - Duration ≥ "days"
+ * - Onset > 3 days ago
  * - Pain in critical locations (chest, abdomen, head)
  */
 export function shouldTriggerSecondary(metadata: SymptomMetadata): boolean {
@@ -25,13 +36,12 @@ export function shouldTriggerSecondary(metadata: SymptomMetadata): boolean {
     return true;
   }
 
-  // Long duration symptoms
-  if (
-    metadata.duration === Duration.DAYS ||
-    metadata.duration === Duration.WEEKS ||
-    metadata.duration === Duration.ONGOING
-  ) {
-    return true;
+  // Long duration symptoms (onset more than 3 days ago)
+  if (metadata.onset) {
+    const daysSince = getDaysSinceOnset(metadata.onset);
+    if (daysSince > 5) {
+      return true;
+    }
   }
 
   // Critical location symptoms
@@ -44,14 +54,13 @@ export function shouldTriggerSecondary(metadata: SymptomMetadata): boolean {
 
 /**
  * Get the list of OPQRST questions to ask
- * Returns an array of question keys and text
+ * Returns an array of question keys and text (onset removed)
  */
 export function getOPQRSTQuestions(): Array<{
   key: keyof OPQRSTResponses;
   question: string;
 }> {
   return [
-    { key: 'onset', question: OPQRST_QUESTIONS.onset },
     { key: 'provocation', question: OPQRST_QUESTIONS.provocation },
     { key: 'quality', question: OPQRST_QUESTIONS.quality },
     { key: 'radiation', question: OPQRST_QUESTIONS.radiation },
@@ -65,9 +74,6 @@ export function getOPQRSTQuestions(): Array<{
 export function formatOPQRSTResponses(responses: OPQRSTResponses): string {
   const sections: string[] = [];
 
-  if (responses.onset) {
-    sections.push(`Onset: ${responses.onset}`);
-  }
   if (responses.provocation) {
     sections.push(`Provocation/Palliation: ${responses.provocation}`);
   }
@@ -94,12 +100,11 @@ export function getSecondaryQuestionsRationale(metadata: SymptomMetadata): strin
     reasons.push('high severity');
   }
 
-  if (
-    metadata.duration === Duration.DAYS ||
-    metadata.duration === Duration.WEEKS ||
-    metadata.duration === Duration.ONGOING
-  ) {
-    reasons.push('extended duration');
+  if (metadata.onset) {
+    const daysSince = getDaysSinceOnset(metadata.onset);
+    if (daysSince > 3) {
+      reasons.push('extended duration');
+    }
   }
 
   if (CRITICAL_LOCATIONS.includes(metadata.location)) {

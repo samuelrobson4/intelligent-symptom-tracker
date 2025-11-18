@@ -1,7 +1,7 @@
-import { TestHarnessWithOPQRST } from './TestHarnessWithOPQRST';
+import { ChatInterface } from './ChatInterface';
 
 function App() {
-  return <TestHarnessWithOPQRST />;
+  return <ChatInterface />;
 }
 
 export default App;

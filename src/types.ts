@@ -12,14 +12,6 @@ export enum Location {
   OTHER = 'other',
 }
 
-export enum Duration {
-  JUST_STARTED = 'just_started',
-  HOURS = 'hours',
-  DAYS = 'days',
-  WEEKS = 'weeks',
-  ONGOING = 'ongoing',
-}
-
 // Severity is 0-10, but we use a type alias for clarity
 export type Severity = number; // 0-10
 
@@ -28,7 +20,7 @@ export type Severity = number; // 0-10
  */
 export interface SymptomMetadata {
   location: Location;
-  duration: Duration;
+  onset: string; // ISO date string (YYYY-MM-DD)
   severity: Severity;
   description?: string; // The original user description
 }
@@ -37,7 +29,6 @@ export interface SymptomMetadata {
  * OPQRST framework for secondary questions
  */
 export interface OPQRSTResponses {
-  onset?: string; // When did this start?
   provocation?: string; // What makes it better or worse?
   quality?: string; // How would you describe it? (sharp, dull, throbbing)
   radiation?: string; // Does the pain spread anywhere?
@@ -60,10 +51,8 @@ export interface SymptomEntry {
  */
 export interface ExtractionResponse {
   metadata: SymptomMetadata;
-  needsMoreInfo?: boolean;
-  followUpQuestion?: string;
-  emergencyDetected?: boolean;
-  emergencyMessage?: string;
+  aiMessage?: string; // AI's conversational response to the user
+  conversationComplete?: boolean; // True when AI has all necessary information
 }
 
 /**
