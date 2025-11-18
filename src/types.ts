@@ -2,13 +2,28 @@
  * Core type definitions for the Conversational Symptom Logger
  */
 
-// Controlled vocabularies
+// Controlled vocabularies - Body locations
 export enum Location {
   HEAD = 'head',
+  NECK = 'neck',
+  THROAT = 'throat',
+  JAW = 'jaw',
+  EAR = 'ear',
+  EYE = 'eye',
   CHEST = 'chest',
+  UPPER_BACK = 'upper_back',
+  LOWER_BACK = 'lower_back',
   ABDOMEN = 'abdomen',
-  BACK = 'back',
-  LIMBS = 'limbs',
+  SHOULDER = 'shoulder',
+  ARM = 'arm',
+  ELBOW = 'elbow',
+  WRIST = 'wrist',
+  HAND = 'hand',
+  HIP = 'hip',
+  LEG = 'leg',
+  KNEE = 'knee',
+  ANKLE = 'ankle',
+  FOOT = 'foot',
   OTHER = 'other',
 }
 
@@ -26,9 +41,10 @@ export interface SymptomMetadata {
 }
 
 /**
- * OPQRST framework for secondary questions
+ * Additional insights about the symptom
+ * Collected for more severe or chronic symptoms
  */
-export interface OPQRSTResponses {
+export interface AdditionalInsights {
   provocation?: string; // What makes it better or worse?
   quality?: string; // How would you describe it? (sharp, dull, throbbing)
   radiation?: string; // Does the pain spread anywhere?
@@ -36,13 +52,13 @@ export interface OPQRSTResponses {
 }
 
 /**
- * Complete symptom entry with primary and secondary data
+ * Complete symptom entry with primary and additional insights
  */
 export interface SymptomEntry {
   id: string;
   timestamp: Date;
   metadata: SymptomMetadata;
-  secondaryResponses?: OPQRSTResponses;
+  additionalInsights?: AdditionalInsights;
   conversationHistory?: string[]; // Track the conversation for context
 }
 

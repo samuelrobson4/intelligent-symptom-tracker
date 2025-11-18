@@ -7,7 +7,7 @@ import {
   processChatMessage,
   ConversationMessage,
 } from './claudeService';
-import { SymptomMetadata, OPQRSTResponses } from './types';
+import { SymptomMetadata, AdditionalInsights } from './types';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -20,7 +20,7 @@ export function ChatInterface() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extractedMetadata, setExtractedMetadata] = useState<SymptomMetadata | null>(null);
-  const [secondaryResponses, setSecondaryResponses] = useState<OPQRSTResponses>({});
+  const [additionalInsights, setAdditionalInsights] = useState<AdditionalInsights>({});
   const [conversationComplete, setConversationComplete] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -52,7 +52,7 @@ export function ChatInterface() {
 
       // Update metadata
       setExtractedMetadata(result.extractedData.metadata);
-      setSecondaryResponses(result.secondaryResponses);
+      setAdditionalInsights(result.additionalInsights);
       setConversationComplete(result.extractedData.conversationComplete || false);
 
       // Add AI response to chat
@@ -73,7 +73,7 @@ export function ChatInterface() {
     setInput('');
     setError(null);
     setExtractedMetadata(null);
-    setSecondaryResponses({});
+    setAdditionalInsights({});
     setConversationComplete(false);
   };
 
@@ -230,11 +230,11 @@ export function ChatInterface() {
               </div>
             </div>
 
-            {Object.keys(secondaryResponses).length > 0 && (
+            {Object.keys(additionalInsights).length > 0 && (
               <>
-                <h4 className="text-sm font-semibold text-gray-700 mb-2 mt-4">OPQRST Details</h4>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2 mt-4">Additional Insights</h4>
                 <div className="space-y-2">
-                  {Object.entries(secondaryResponses).map(([key, value]) =>
+                  {Object.entries(additionalInsights).map(([key, value]) =>
                     value ? (
                       <div key={key}>
                         <span className="text-sm font-medium text-gray-600">
@@ -253,7 +253,7 @@ export function ChatInterface() {
                 View JSON
               </summary>
               <pre className="mt-2 bg-gray-900 text-green-400 p-3 rounded text-xs overflow-x-auto">
-                {JSON.stringify({ metadata: extractedMetadata, secondaryResponses }, null, 2)}
+                {JSON.stringify({ metadata: extractedMetadata, additionalInsights }, null, 2)}
               </pre>
             </details>
           </div>

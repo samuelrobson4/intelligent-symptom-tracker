@@ -3,7 +3,12 @@
  */
 
 export const CONTROLLED_VOCABULARIES = {
-  location: ['head', 'chest', 'abdomen', 'back', 'limbs', 'other'],
+  location: [
+    'head', 'neck', 'throat', 'jaw', 'ear', 'eye',
+    'chest', 'upper_back', 'lower_back', 'abdomen',
+    'shoulder', 'arm', 'elbow', 'wrist', 'hand',
+    'hip', 'leg', 'knee', 'ankle', 'foot', 'other'
+  ],
   severity: '0-10 scale (0 = no pain, 10 = worst imaginable pain)',
 };
 
@@ -15,7 +20,7 @@ REQUIRED INFORMATION:
 3. **Severity**: how bad it is (${CONTROLLED_VOCABULARIES.severity})
 4. **Description**: brief summary of the symptom
 
-SECONDARY INFORMATION (ask if severity ≥7 OR onset >3 days ago OR location is chest/abdomen/head):
+ADDITIONAL INSIGHTS (ask if severity ≥7 OR onset >5 days ago OR location is critical like chest/abdomen/head):
 - **Provocation**: What makes it better or worse?
 - **Quality**: How would you describe it? (sharp, dull, throbbing, etc.)
 - **Radiation**: Does it spread anywhere?
@@ -32,12 +37,12 @@ CONVERSATION GUIDELINES:
 RESPONSE FORMAT (JSON only, no markdown):
 {
   "metadata": {
-    "location": "head" | "chest" | "abdomen" | "back" | "limbs" | "other" (or null if not yet known),
+    "location": one of [${CONTROLLED_VOCABULARIES.location.join(', ')}] (or null if not yet known),
     "onset": "YYYY-MM-DD" (or null if not yet known),
     "severity": 0-10 (or null if not yet known),
     "description": "brief summary" (or null if not yet known)
   },
-  "secondaryResponses": {
+  "additionalInsights": {
     "provocation": "string or null",
     "quality": "string or null",
     "radiation": "string or null",
@@ -57,7 +62,7 @@ User: "I have a bad headache"
     "severity": null,
     "description": "headache"
   },
-  "secondaryResponses": {},
+  "additionalInsights": {},
   "aiMessage": "I'm sorry to hear you're dealing with a headache. When did this headache start? If you can provide a specific date, that would be helpful.",
   "conversationComplete": false
 }
@@ -71,7 +76,7 @@ Context: Today is 2025-11-18
     "severity": null,
     "description": "headache"
   },
-  "secondaryResponses": {},
+  "additionalInsights": {},
   "aiMessage": "Got it, started this morning. On a scale of 0 to 10, with 10 being the worst pain imaginable, how would you rate your headache?",
   "conversationComplete": false
 }
@@ -84,7 +89,7 @@ User: "about a 6"
     "severity": 6,
     "description": "headache"
   },
-  "secondaryResponses": {},
+  "additionalInsights": {},
   "aiMessage": "Thank you for that information. I have everything I need to log your symptom. Would you like me to save this entry?",
   "conversationComplete": true
 }
@@ -98,7 +103,7 @@ Context: Today is 2025-11-18
     "severity": 8,
     "description": "severe chest pain"
   },
-  "secondaryResponses": {},
+  "additionalInsights": {},
   "aiMessage": "I'm sorry you've been experiencing severe chest pain for a week. That must be very difficult. Can you describe the quality of the pain? Is it sharp, dull, throbbing, or something else?",
   "conversationComplete": false
 }
@@ -111,12 +116,12 @@ The previous response had an error: ${errorMessage}
 Please correct the response and ensure it follows the exact JSON format specified:
 {
   "metadata": {
-    "location": "head" | "chest" | "abdomen" | "back" | "limbs" | "other" (or null),
+    "location": one of [${CONTROLLED_VOCABULARIES.location.join(', ')}] (or null),
     "onset": "YYYY-MM-DD" (or null),
     "severity": 0-10 number (or null),
     "description": "string" (or null)
   },
-  "secondaryResponses": {
+  "additionalInsights": {
     "provocation": "string or null",
     "quality": "string or null",
     "radiation": "string or null",
@@ -129,8 +134,8 @@ Please correct the response and ensure it follows the exact JSON format specifie
 Respond with ONLY valid JSON, no markdown formatting.
 `;
 
-// OPQRST Secondary Questions (now excluding onset)
-export const OPQRST_QUESTIONS = {
+// Additional insight questions for deeper symptom understanding
+export const ADDITIONAL_QUESTIONS = {
   provocation: "What makes the pain better or worse?",
   quality: "How would you describe the sensation? (For example: sharp, dull, throbbing, burning, aching)",
   radiation: "Does the pain stay in one place, or does it spread anywhere else in your body?",

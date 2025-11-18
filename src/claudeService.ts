@@ -3,7 +3,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { ExtractionResponse, OPQRSTResponses } from './types';
+import { ExtractionResponse, AdditionalInsights } from './types';
 import { CONVERSATIONAL_PROMPT, RETRY_PROMPT } from './promptTemplates';
 import { parseAndValidate, generateErrorFeedback } from './validators';
 
@@ -218,7 +218,7 @@ export interface ConversationMessage {
 
 export interface ConversationResult {
   extractedData: ExtractionResponse;
-  secondaryResponses: OPQRSTResponses;
+  additionalInsights: AdditionalInsights;
 }
 
 export async function processChatMessage(
@@ -287,11 +287,11 @@ export async function processChatMessage(
           conversationComplete: parsed.conversationComplete || false,
         };
 
-        const secondaryResponses: OPQRSTResponses = parsed.secondaryResponses || {};
+        const additionalInsights: AdditionalInsights = parsed.additionalInsights || {};
 
         return {
           extractedData,
-          secondaryResponses,
+          additionalInsights,
         };
       }
 
