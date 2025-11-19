@@ -1,29 +1,70 @@
 /**
  * Chat-based interface for conversational symptom logging
+ * Upgraded with shadcn/ui components
  */
 
 import { useState, useRef, useEffect } from 'react';
+import { processChatMessage, ConversationMessage } from '@/claudeService';
+import { SymptomMetadata, AdditionalInsights, SuggestedIssue, SymptomEntry, Issue } from '@/types';
+import { Message } from '@/components/Message';
+import { ChatInput } from '@/components/ChatInput';
+import { IssueSelector } from '@/components/IssueSelector';
 import {
-  processChatMessage,
-  ConversationMessage,
-} from './claudeService';
-import { SymptomMetadata, AdditionalInsights } from './types';
+  getEnrichedIssues,
+  EnrichedIssue,
+  saveIssue,
+  saveSymptom,
+  linkSymptomToIssue,
+  generateUUID,
+} from '@/localStorage';
+import { getTodayISO } from '@/utils/dateHelpers';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { AlertCircle, CheckCircle2, Loader2, Save } from 'lucide-react';
 
-interface Message {
+interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
-export function ChatInterface() {
-  const [messages, setMessages] = useState<Message[]>([]);
+interface ChatInterfaceProps {
+  onDataChange?: () => void;
+}
+
+export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extractedMetadata, setExtractedMetadata] = useState<SymptomMetadata | null>(null);
   const [additionalInsights, setAdditionalInsights] = useState<AdditionalInsights>({});
   const [conversationComplete, setConversationComplete] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+
+  // Issue tracking state
+  const [issues, setIssues] = useState<EnrichedIssue[]>([]);
+  const [suggestedIssue, setSuggestedIssue] = useState<SuggestedIssue | null>(null);
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [newIssueName, setNewIssueName] = useState('');
+  const [newIssueStartDate, setNewIssueStartDate] = useState(getTodayISO());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Load active issues on mount
+  useEffect(() => {
+    setIssues(getEnrichedIssues('active'));
+  }, []);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -39,21 +80,36 @@ export function ChatInterface() {
     setError(null);
 
     // Add user message to chat
-    const newMessages: Message[] = [...messages, { role: 'user', content: userMessage }];
+    const newMessages: ChatMessage[] = [...messages, { role: 'user', content: userMessage }];
     setMessages(newMessages);
     setLoading(true);
 
     try {
-      // Process the message with conversation context
+      // Process the message with conversation context and active issues
       const result = await processChatMessage(
-        newMessages.slice(0, -1) as ConversationMessage[], // Exclude the message we just added
-        userMessage
+        newMessages.slice(0, -1) as ConversationMessage[],
+        userMessage,
+        issues // Pass active issues for AI to suggest matches
       );
 
       // Update metadata
       setExtractedMetadata(result.extractedData.metadata);
       setAdditionalInsights(result.additionalInsights);
       setConversationComplete(result.extractedData.conversationComplete || false);
+
+      // Handle AI's issue suggestion
+      if (result.extractedData.suggestedIssue) {
+        setSuggestedIssue(result.extractedData.suggestedIssue);
+
+        // Auto-select if AI is confident
+        if (
+          result.extractedData.suggestedIssue.isRelated &&
+          result.extractedData.suggestedIssue.confidence > 0.7 &&
+          result.extractedData.suggestedIssue.existingIssueId
+        ) {
+          setSelectedIssueId(result.extractedData.suggestedIssue.existingIssueId);
+        }
+      }
 
       // Add AI response to chat
       if (result.extractedData.aiMessage) {
@@ -75,190 +131,285 @@ export function ChatInterface() {
     setExtractedMetadata(null);
     setAdditionalInsights({});
     setConversationComplete(false);
+    setShowSaveDialog(false);
+    // Reset issue state
+    setSuggestedIssue(null);
+    setSelectedIssueId(null);
+    setNewIssueName('');
+    setNewIssueStartDate(getTodayISO());
   };
 
-  const handleQuickTest = (testMessage: string) => {
-    setInput(testMessage);
+  const handleSaveSymptom = () => {
+    if (!extractedMetadata) {
+      setError('No symptom data to save');
+      return;
+    }
+
+    try {
+      // Generate symptom ID
+      const symptomId = generateUUID();
+      let finalIssueId: string | undefined = undefined;
+
+      // Handle new issue creation
+      if (selectedIssueId === '__new__') {
+        if (!newIssueName.trim()) {
+          setError('Please provide a name for the new issue');
+          return;
+        }
+
+        if (!newIssueStartDate) {
+          setError('Please provide a start date for the new issue');
+          return;
+        }
+
+        const newIssue: Issue = {
+          id: generateUUID(),
+          name: newIssueName.trim(),
+          status: 'active',
+          startDate: newIssueStartDate,
+          createdAt: new Date(),
+          symptomIds: [symptomId],
+        };
+
+        saveIssue(newIssue);
+        finalIssueId = newIssue.id;
+
+        // Refresh issues list
+        setIssues(getEnrichedIssues('active'));
+      } else if (selectedIssueId && selectedIssueId !== '__none__') {
+        // Link to existing issue
+        finalIssueId = selectedIssueId;
+      }
+
+      // Save symptom with issue linkage
+      const symptomEntry: SymptomEntry = {
+        id: symptomId,
+        timestamp: new Date(),
+        metadata: extractedMetadata,
+        additionalInsights,
+        conversationHistory: messages.map(m => m.content),
+        issueId: finalIssueId,
+      };
+
+      saveSymptom(symptomEntry);
+
+      // Link to existing issue if selected
+      if (finalIssueId && selectedIssueId !== '__new__') {
+        linkSymptomToIssue(symptomId, finalIssueId);
+      }
+
+      // Close dialog and reset form
+      setShowSaveDialog(false);
+      handleReset();
+
+      // Notify parent component to refresh tables
+      onDataChange?.();
+
+      // Show success message
+      const issueMessage = finalIssueId
+        ? ` and linked to ${selectedIssueId === '__new__' ? newIssueName : issues.find(i => i.id === finalIssueId)?.name}`
+        : '';
+      alert(`Symptom logged successfully${issueMessage}!`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save symptom');
+    }
   };
 
-  const testCases = [
+  const handleContinueEditing = () => {
+    setShowSaveDialog(false);
+    setConversationComplete(false);
+  };
+
+  const getSeverityBadge = (severity: number) => {
+    if (severity >= 7) return <Badge variant="destructive">{severity}/10</Badge>;
+    if (severity >= 4) return <Badge variant="default" className="bg-yellow-500">{severity}/10</Badge>;
+    return <Badge variant="secondary">{severity}/10</Badge>;
+  };
+
+  const quickPrompts = [
     'I have a bad headache',
     'severe chest pain for the past week',
     'my stomach has been hurting',
-    'sharp pain in my leg since yesterday',
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
-        <h1 className="text-2xl font-bold text-gray-900">Symptom Logger</h1>
-        <p className="text-sm text-gray-600">Describe your symptoms in your own words</p>
+    <div className="flex flex-col h-[calc(100vh-120px)] bg-white border border-gray-200 rounded-lg">
+      {/* Agent Header - Minimal */}
+      <div className="flex items-center gap-3 p-3 border-b border-gray-200">
+        <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-xs font-semibold relative">
+          S
+          <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-gray-900">Symptom Agent</div>
+          <div className="text-[10px] text-gray-500">Active</div>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-hidden flex flex-col max-w-4xl w-full mx-auto">
-        {/* Quick test cases - only show when no messages */}
-        {messages.length === 0 && (
-          <div className="p-4 bg-blue-50 border-b border-blue-100">
-            <p className="text-sm font-medium text-blue-900 mb-2">Try these examples:</p>
-            <div className="flex flex-wrap gap-2">
-              {testCases.map((test) => (
-                <button
-                  key={test}
-                  onClick={() => handleQuickTest(test)}
-                  className="px-3 py-1 text-sm bg-white text-blue-700 rounded-md hover:bg-blue-100 transition-colors border border-blue-200"
-                >
-                  "{test}"
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+      <div className="flex-1 overflow-hidden flex flex-col">
 
         {/* Messages area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length === 0 && (
-            <div className="text-center text-gray-500 mt-8">
-              <p className="text-lg">Start a conversation to log your symptom</p>
-              <p className="text-sm mt-2">I'll ask you questions to gather all the necessary details</p>
-            </div>
-          )}
-
+        <ScrollArea className="flex-1 px-3 py-3">
           {messages.map((message, index) => (
-            <div
-              key={index}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                  message.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white border border-gray-200 text-gray-900'
-                }`}
-              >
-                <p className="whitespace-pre-wrap">{message.content}</p>
-              </div>
-            </div>
+            <Message key={index} role={message.role} content={message.content} />
           ))}
 
           {loading && (
-            <div className="flex justify-start">
-              <div className="bg-gray-100 rounded-lg px-4 py-2 text-gray-600">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+            <div className="flex justify-start mb-3">
+              <div className="bg-gray-100 rounded-2xl px-3 py-1.5 max-w-[80%]">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-3 w-3 animate-spin text-gray-500" />
+                  <span className="text-xs text-gray-600">Typing...</span>
                 </div>
               </div>
             </div>
           )}
 
           <div ref={messagesEndRef} />
-        </div>
+        </ScrollArea>
 
         {/* Error display */}
         {error && (
-          <div className="mx-4 mb-2 bg-red-50 border border-red-200 rounded-lg p-3">
-            <p className="text-red-800 text-sm">{error}</p>
+          <div className="mx-3 mb-2">
+            <Alert variant="destructive">
+              <AlertCircle className="h-3 w-3" />
+              <AlertDescription className="text-xs">{error}</AlertDescription>
+            </Alert>
           </div>
         )}
 
-        {/* Completion status */}
+        {/* Completion status - minimal */}
         {conversationComplete && (
-          <div className="mx-4 mb-2 bg-green-50 border border-green-200 rounded-lg p-3">
-            <p className="text-green-800 text-sm font-medium">
-              ✓ All information collected! You can review below or start a new entry.
-            </p>
+          <div className="mx-3 mb-2 flex items-center justify-between px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-3 w-3 text-green-600" />
+              <span className="text-xs text-green-900">Ready to save</span>
+            </div>
+            <Button
+              size="sm"
+              className="bg-blue-400 hover:bg-blue-500 text-xs h-7 px-3"
+              onClick={() => setShowSaveDialog(true)}
+            >
+              Save
+            </Button>
           </div>
         )}
 
-        {/* Input area */}
-        <div className="border-t border-gray-200 bg-white p-4">
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your message..."
-              disabled={loading}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-            />
-            <button
-              type="submit"
-              disabled={loading || !input.trim()}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
-            >
-              Send
-            </button>
-          </form>
+        {/* Quick Prompts - only show when no messages */}
+        {messages.length === 0 && (
+          <div className="px-3 pb-3">
+            <div className="flex flex-wrap gap-2">
+              {quickPrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  onClick={() => setInput(prompt)}
+                  className="px-3 py-1.5 text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Input area - minimal */}
+        <div className="border-t border-gray-200 p-3">
+          <ChatInput
+            value={input}
+            onChange={setInput}
+            onSubmit={handleSubmit}
+            disabled={loading}
+          />
         </div>
       </div>
 
-      {/* Extracted data panel (dev view) */}
-      {extractedMetadata && (
-        <div className="max-w-4xl w-full mx-auto p-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-lg font-semibold text-gray-900">Extracted Data</h3>
-              <button
-                onClick={handleReset}
-                className="px-4 py-1 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-              >
-                New Entry
-              </button>
-            </div>
+      {/* Save Confirmation Dialog */}
+      <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Confirm Symptom Entry</DialogTitle>
+            <DialogDescription>
+              Please review your symptom information before saving.
+            </DialogDescription>
+          </DialogHeader>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
+          {extractedMetadata && (
+            <div className="space-y-4 py-4">
+              {/* Primary Metadata */}
               <div>
-                <span className="text-sm text-gray-600">Location:</span>
-                <p className="font-medium text-gray-900">{extractedMetadata.location || 'Not yet provided'}</p>
-              </div>
-              <div>
-                <span className="text-sm text-gray-600">Onset:</span>
-                <p className="font-medium text-gray-900">{extractedMetadata.onset || 'Not yet provided'}</p>
-              </div>
-              <div>
-                <span className="text-sm text-gray-600">Severity:</span>
-                <p className="font-medium text-gray-900">
-                  {extractedMetadata.severity !== null && extractedMetadata.severity !== undefined
-                    ? `${extractedMetadata.severity}/10`
-                    : 'Not yet provided'}
-                </p>
-              </div>
-              <div>
-                <span className="text-sm text-gray-600">Description:</span>
-                <p className="font-medium text-gray-900">{extractedMetadata.description || 'Not yet provided'}</p>
-              </div>
-            </div>
-
-            {Object.keys(additionalInsights).length > 0 && (
-              <>
-                <h4 className="text-sm font-semibold text-gray-700 mb-2 mt-4">Additional Insights</h4>
-                <div className="space-y-2">
-                  {Object.entries(additionalInsights).map(([key, value]) =>
-                    value ? (
-                      <div key={key}>
-                        <span className="text-sm font-medium text-gray-600">
-                          {key.charAt(0).toUpperCase() + key.slice(1)}:
-                        </span>
-                        <p className="text-gray-900 text-sm">{value}</p>
-                      </div>
-                    ) : null
-                  )}
+                <h4 className="font-semibold mb-3">Symptom Details</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Location</p>
+                    <p className="font-medium">{extractedMetadata.location || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Onset Date</p>
+                    <p className="font-medium">{extractedMetadata.onset || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Severity</p>
+                    <div className="mt-1">
+                      {extractedMetadata.severity !== null && extractedMetadata.severity !== undefined
+                        ? getSeverityBadge(extractedMetadata.severity)
+                        : <span className="text-sm">Not provided</span>}
+                    </div>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-sm text-muted-foreground">Description</p>
+                    <p className="font-medium">{extractedMetadata.description || 'Not provided'}</p>
+                  </div>
                 </div>
-              </>
-            )}
+              </div>
 
-            <details className="mt-4">
-              <summary className="text-sm text-gray-600 cursor-pointer hover:text-gray-900">
-                View JSON
-              </summary>
-              <pre className="mt-2 bg-gray-900 text-green-400 p-3 rounded text-xs overflow-x-auto">
-                {JSON.stringify({ metadata: extractedMetadata, additionalInsights }, null, 2)}
-              </pre>
-            </details>
-          </div>
-        </div>
-      )}
+              {/* Additional Insights */}
+              {Object.keys(additionalInsights).length > 0 && (
+                <>
+                  <Separator />
+                  <div>
+                    <h4 className="font-semibold mb-3">Additional Insights</h4>
+                    <div className="space-y-3">
+                      {Object.entries(additionalInsights).map(([key, value]) =>
+                        value ? (
+                          <div key={key}>
+                            <p className="text-sm text-muted-foreground">
+                              {key.charAt(0).toUpperCase() + key.slice(1)}
+                            </p>
+                            <p className="text-sm">{value}</p>
+                          </div>
+                        ) : null
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Issue Selector */}
+              <Separator />
+              <IssueSelector
+                issues={issues}
+                selectedIssueId={selectedIssueId}
+                onSelectIssue={setSelectedIssueId}
+                suggestedIssue={suggestedIssue}
+                newIssueName={newIssueName}
+                onNewIssueNameChange={setNewIssueName}
+                newIssueStartDate={newIssueStartDate}
+                onNewIssueStartDateChange={setNewIssueStartDate}
+              />
+            </div>
+          )}
+
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={handleContinueEditing}>
+              Continue Editing
+            </Button>
+            <Button onClick={handleSaveSymptom}>
+              <Save className="h-4 w-4 mr-2" />
+              Save Symptom
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

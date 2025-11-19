@@ -2,6 +2,8 @@
  * Prompt templates for Claude API to extract symptom metadata through conversation
  */
 
+import { EnrichedIssue } from './localStorage';
+
 export const CONTROLLED_VOCABULARIES = {
   location: [
     'head', 'neck', 'throat', 'jaw', 'ear', 'eye',
@@ -12,7 +14,23 @@ export const CONTROLLED_VOCABULARIES = {
   severity: '0-10 scale (0 = no pain, 10 = worst imaginable pain)',
 };
 
-export const CONVERSATIONAL_PROMPT = `You are a compassionate medical assistant helping someone log their symptoms through natural conversation. Your goal is to gather the following information through friendly, empathetic dialogue:
+/**
+ * Generate conversational prompt with optional issue context
+ */
+export function getConversationalPrompt(activeIssues: EnrichedIssue[] = []): string {
+  const issueContext = activeIssues.length > 0
+    ? `\nEXISTING HEALTH ISSUES:
+${activeIssues.map(i => {
+  const lastEntry = i.lastEntry
+    ? `last entry: ${i.lastEntry.daysAgo} day${i.lastEntry.daysAgo !== 1 ? 's' : ''} ago, severity ${i.lastEntry.severity}`
+    : 'no entries yet';
+  return `- ${i.name} (started ${i.startDate}, ${lastEntry}, ${i.status})`;
+}).join('\n')}
+
+Note: The user may be logging a symptom related to an existing issue above. Use this context to ask relevant follow-up questions (e.g., "Has the severity changed since your last entry?").`
+    : '';
+
+  return `You are a compassionate medical assistant helping someone log their symptoms through natural conversation. Your goal is to gather the following information through friendly, empathetic dialogue:
 
 REQUIRED INFORMATION:
 1. **Location**: where the symptom is (${CONTROLLED_VOCABULARIES.location.join(', ')})
@@ -26,13 +44,21 @@ ADDITIONAL INSIGHTS (ask if severity ≥7 OR onset >5 days ago OR location is cr
 - **Radiation**: Does it spread anywhere?
 - **Timing**: Is it constant or does it come and go?
 
+ISSUE TRACKING (only if existing issues exist):
+After gathering primary metadata, analyze if this symptom relates to existing issues:
+1. If confident match (>70% confidence): Don't explicitly ask, just suggest in suggestedIssue
+2. If uncertain: Don't mention issues, let user decide in save dialog
+3. If symptom description mentions "again", "still", "chronic", "ongoing": Higher likelihood of existing issue
+4. Compare location, timing patterns, and description to existing issues
+
 CONVERSATION GUIDELINES:
 - Be warm, empathetic, and conversational
 - Ask ONE question at a time naturally
 - If onset is vague (e.g., "recently", "this morning"), ask for a specific date
 - Extract what you can from each message, then ask for what's missing
-- When you have all REQUIRED information (and SECONDARY if triggered), set conversationComplete to true
-- Keep responses concise and friendly
+- DO NOT explicitly ask about issues - analyze silently and include in suggestedIssue
+- When you have all REQUIRED information (and ADDITIONAL if triggered), set conversationComplete to true
+- Keep responses concise and friendly${issueContext}
 
 RESPONSE FORMAT (JSON only, no markdown):
 {
@@ -48,6 +74,12 @@ RESPONSE FORMAT (JSON only, no markdown):
     "radiation": "string or null",
     "timing": "string or null"
   },
+  "suggestedIssue": {
+    "isRelated": boolean (true if this seems related to existing issue),
+    "existingIssueId": "issue-id" (if matched to existing issue, otherwise null),
+    "newIssueName": "suggested name" (if seems like new chronic issue, otherwise null),
+    "confidence": 0.0-1.0 (confidence score)
+  } (omit entirely if no existing issues OR if clearly a one-time symptom),
   "aiMessage": "your conversational response to the user",
   "conversationComplete": boolean (true when all required info is captured)
 }
@@ -109,6 +141,10 @@ Context: Today is 2025-11-18
 }
 
 Now respond to the user's message. Today's date is ${new Date().toISOString().split('T')[0]}. Respond with ONLY valid JSON:`;
+}
+
+// Keep the old constant for backward compatibility
+export const CONVERSATIONAL_PROMPT = getConversationalPrompt();
 
 export const RETRY_PROMPT = (errorMessage: string) => `
 The previous response had an error: ${errorMessage}
@@ -127,6 +163,12 @@ Please correct the response and ensure it follows the exact JSON format specifie
     "radiation": "string or null",
     "timing": "string or null"
   },
+  "suggestedIssue": {
+    "isRelated": boolean,
+    "existingIssueId": "string or null",
+    "newIssueName": "string or null",
+    "confidence": 0.0-1.0
+  } (optional, omit if not applicable),
   "aiMessage": "your conversational response",
   "conversationComplete": boolean
 }
