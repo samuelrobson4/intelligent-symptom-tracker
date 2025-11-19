@@ -141,15 +141,39 @@ Day 6 — Conversation Flow Polish
 
 ⸻
 
+Phase 2 — Symptom Display (Days 9–10)
+
+Day 7 — Symptom Table
+	•	SymptomTable.tsx with shadcn Table
+	•	Columns:
+	•	Date, Symptom, Location, Severity, Duration, Actions
+	•	Severity colors:
+	•	Red ≥7
+	•	Yellow 4–6
+	•	Green ≤3
+	•	Delete button with confirmation dialog
+	•	Empty state
+
 ⸻
 
-Phase 2 — Storage & History (Days 7–8)
+Day 8 — Details View & Layout
+	•	Create SymptomDetailsDialog.tsx
+	•	Show:
+	•	Primary fields
+	•	OPQRST secondary responses
+	•	Add two-column layout (chat left, table right)
+	•	Mobile stacked layout
+	•	Add animations for row add/delete
+
+⸻
+
+Phase 3 — Storage & History (Days 7–8)
 
 Autosave + persistence come after core logic and UI work.
 
 ⸻
 
-Day 7 — Storage + Autosave
+Day 9 — Storage + Autosave
 
 Storage
 	•	Create localStorage.ts:
@@ -175,7 +199,7 @@ Tests
 
 ⸻
 
-Day 8 — Multi-Symptom Handling
+Day 10 — Multi-Symptom Handling
 
 Goal
 Handle sentences describing more than one symptom.
@@ -198,35 +222,6 @@ Tasks
 	•	Radiation handled correctly
 	•	Queue drained correctly
 
-⸻
-
-⸻
-
-Phase 3 — Symptom Display (Days 9–10)
-
-Day 9 — Symptom Table
-	•	SymptomTable.tsx with shadcn Table
-	•	Columns:
-	•	Date, Symptom, Location, Severity, Duration, Actions
-	•	Severity colors:
-	•	Red ≥7
-	•	Yellow 4–6
-	•	Green ≤3
-	•	Delete button with confirmation dialog
-	•	Empty state
-
-⸻
-
-Day 10 — Details View & Layout
-	•	Create SymptomDetailsDialog.tsx
-	•	Show:
-	•	Primary fields
-	•	OPQRST secondary responses
-	•	Add two-column layout (chat left, table right)
-	•	Mobile stacked layout
-	•	Add animations for row add/delete
-
-⸻
 
 ⸻
 

@@ -52,6 +52,29 @@ export interface AdditionalInsights {
 }
 
 /**
+ * Health issue or ongoing condition that groups multiple symptom entries
+ */
+export interface Issue {
+  id: string;
+  name: string; // e.g., "Chronic migraines", "Left knee pain"
+  status: 'active' | 'resolved';
+  startDate: string; // ISO date string (YYYY-MM-DD)
+  endDate?: string; // ISO date when resolved
+  createdAt: Date;
+  symptomIds: string[]; // References to SymptomEntry.id
+}
+
+/**
+ * AI suggestion for issue relationship
+ */
+export interface SuggestedIssue {
+  isRelated: boolean; // AI thinks this relates to an issue
+  existingIssueId?: string; // ID of matched existing issue
+  newIssueName?: string; // Suggested name if creating new issue
+  confidence: number; // 0-1 confidence score
+}
+
+/**
  * Complete symptom entry with primary and additional insights
  */
 export interface SymptomEntry {
@@ -60,6 +83,7 @@ export interface SymptomEntry {
   metadata: SymptomMetadata;
   additionalInsights?: AdditionalInsights;
   conversationHistory?: string[]; // Track the conversation for context
+  issueId?: string; // Optional reference to parent issue
 }
 
 /**
@@ -69,6 +93,7 @@ export interface ExtractionResponse {
   metadata: SymptomMetadata;
   aiMessage?: string; // AI's conversational response to the user
   conversationComplete?: boolean; // True when AI has all necessary information
+  suggestedIssue?: SuggestedIssue; // AI's suggestion for issue relationship
 }
 
 /**
