@@ -141,7 +141,7 @@ Day 6 — Conversation Flow Polish
 
 ⸻
 
-Phase 2 — Symptom Display (Days 9–10)
+Phase 2 — Symptom Display, Storage & History (Days 9–10)
 
 Day 7 — Symptom Table
 	•	SymptomTable.tsx with shadcn Table
@@ -164,12 +164,6 @@ Day 8 — Details View & Layout
 	•	Add two-column layout (chat left, table right)
 	•	Mobile stacked layout
 	•	Add animations for row add/delete
-
-⸻
-
-Phase 3 — Storage & History (Days 7–8)
-
-Autosave + persistence come after core logic and UI work.
 
 ⸻
 
