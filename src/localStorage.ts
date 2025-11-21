@@ -2,11 +2,12 @@
  * LocalStorage persistence layer for symptoms and issues
  */
 
-import { SymptomEntry, Issue } from './types';
+import { SymptomEntry, Issue, SymptomMetadata, AdditionalInsights, SuggestedIssue, IssueSelection } from './types';
 import { generateUUID } from './utils/uuid';
 import { isValidDateRange } from './utils/dateHelpers';
 
 const STORAGE_KEY = 'symptom_logger_data';
+const DRAFT_KEY = 'symptom_logger_draft';
 
 interface StorageData {
   symptoms: SymptomEntry[];
@@ -445,4 +446,73 @@ export { generateUUID };
  */
 export function clearAllData(): void {
   localStorage.removeItem(STORAGE_KEY);
+}
+
+/**
+ * Draft conversation state for autosave/resume
+ */
+export interface ConversationDraft {
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  extractedMetadata: SymptomMetadata | null;
+  additionalInsights: AdditionalInsights;
+  queuedSymptoms: string[];
+  suggestedIssue: SuggestedIssue | null;
+  issueSelection: IssueSelection | null;
+  conversationComplete: boolean;
+  timestamp: Date;
+}
+
+/**
+ * Save current conversation state as draft
+ */
+export function saveDraft(draft: ConversationDraft): void {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch (error) {
+    console.error('Error saving draft to localStorage:', error);
+  }
+}
+
+/**
+ * Get saved draft from localStorage
+ */
+export function getDraft(): ConversationDraft | null {
+  try {
+    const data = localStorage.getItem(DRAFT_KEY);
+    if (!data) {
+      return null;
+    }
+
+    const parsed = JSON.parse(data);
+
+    // Convert timestamp back to Date object
+    parsed.timestamp = new Date(parsed.timestamp);
+
+    return parsed;
+  } catch (error) {
+    console.error('Error reading draft from localStorage:', error);
+    return null;
+  }
+}
+
+/**
+ * Clear saved draft
+ */
+export function clearDraft(): void {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch (error) {
+    console.error('Error clearing draft from localStorage:', error);
+  }
+}
+
+/**
+ * Check if draft is expired (older than 24 hours)
+ */
+export function isDraftExpired(draft: ConversationDraft): boolean {
+  const now = new Date();
+  const draftAge = now.getTime() - draft.timestamp.getTime();
+  const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+  return draftAge > twentyFourHours;
 }

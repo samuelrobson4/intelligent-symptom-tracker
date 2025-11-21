@@ -5,10 +5,9 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { processChatMessage, ConversationMessage } from '@/claudeService';
-import { SymptomMetadata, AdditionalInsights, SuggestedIssue, SymptomEntry, Issue } from '@/types';
+import { SymptomMetadata, AdditionalInsights, SuggestedIssue, SymptomEntry, Issue, IssueSelection } from '@/types';
 import { Message } from '@/components/Message';
 import { ChatInput } from '@/components/ChatInput';
-import { IssueSelector } from '@/components/IssueSelector';
 import {
   getEnrichedIssues,
   EnrichedIssue,
@@ -16,13 +15,15 @@ import {
   saveSymptom,
   linkSymptomToIssue,
   generateUUID,
+  saveDraft,
+  getDraft,
+  clearDraft,
+  isDraftExpired,
+  ConversationDraft,
 } from '@/localStorage';
-import { getTodayISO } from '@/utils/dateHelpers';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import {
   Dialog,
   DialogContent,
@@ -31,7 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { AlertCircle, CheckCircle2, Loader2, Save } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -50,14 +51,21 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
   const [extractedMetadata, setExtractedMetadata] = useState<SymptomMetadata | null>(null);
   const [additionalInsights, setAdditionalInsights] = useState<AdditionalInsights>({});
   const [conversationComplete, setConversationComplete] = useState(false);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
+
+  // Multi-symptom queue state
+  const [queuedSymptoms, setQueuedSymptoms] = useState<string[]>([]);
+
+  // Draft/resume state
+  const [showResumeDialog, setShowResumeDialog] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState<ConversationDraft | null>(null);
 
   // Issue tracking state
   const [issues, setIssues] = useState<EnrichedIssue[]>([]);
+  const [issueSelection, setIssueSelection] = useState<IssueSelection | null>(null);
   const [suggestedIssue, setSuggestedIssue] = useState<SuggestedIssue | null>(null);
-  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
-  const [newIssueName, setNewIssueName] = useState('');
-  const [newIssueStartDate, setNewIssueStartDate] = useState(getTodayISO());
+
+  // Success message state
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -66,10 +74,48 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
     setIssues(getEnrichedIssues('active'));
   }, []);
 
+  // Check for draft on mount
+  useEffect(() => {
+    const draft = getDraft();
+    if (draft && !isDraftExpired(draft)) {
+      setPendingDraft(draft);
+      setShowResumeDialog(true);
+    } else if (draft && isDraftExpired(draft)) {
+      // Clear expired draft
+      clearDraft();
+    }
+  }, []);
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Autosave draft as conversation progresses
+  useEffect(() => {
+    // Only autosave if there are messages and conversation is not complete
+    if (messages.length > 0 && !conversationComplete) {
+      const draft: ConversationDraft = {
+        messages,
+        extractedMetadata,
+        additionalInsights,
+        queuedSymptoms,
+        suggestedIssue,
+        issueSelection,
+        conversationComplete,
+        timestamp: new Date(),
+      };
+      saveDraft(draft);
+    }
+  }, [
+    messages,
+    extractedMetadata,
+    additionalInsights,
+    queuedSymptoms,
+    suggestedIssue,
+    issueSelection,
+    conversationComplete,
+  ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,18 +143,19 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
       setAdditionalInsights(result.additionalInsights);
       setConversationComplete(result.extractedData.conversationComplete || false);
 
+      // Handle multi-symptom queue
+      if (result.extractedData.queuedSymptoms && result.extractedData.queuedSymptoms.length > 0) {
+        setQueuedSymptoms(result.extractedData.queuedSymptoms);
+      }
+
       // Handle AI's issue suggestion
       if (result.extractedData.suggestedIssue) {
         setSuggestedIssue(result.extractedData.suggestedIssue);
+      }
 
-        // Auto-select if AI is confident
-        if (
-          result.extractedData.suggestedIssue.isRelated &&
-          result.extractedData.suggestedIssue.confidence > 0.7 &&
-          result.extractedData.suggestedIssue.existingIssueId
-        ) {
-          setSelectedIssueId(result.extractedData.suggestedIssue.existingIssueId);
-        }
+      // Handle issue selection from conversation
+      if (result.extractedData.issueSelection) {
+        setIssueSelection(result.extractedData.issueSelection);
       }
 
       // Add AI response to chat
@@ -131,100 +178,211 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
     setExtractedMetadata(null);
     setAdditionalInsights({});
     setConversationComplete(false);
-    setShowSaveDialog(false);
+    // Reset multi-symptom queue
+    setQueuedSymptoms([]);
     // Reset issue state
     setSuggestedIssue(null);
-    setSelectedIssueId(null);
-    setNewIssueName('');
-    setNewIssueStartDate(getTodayISO());
+    setIssueSelection(null);
+    // Clear success message
+    setSuccessMessage(null);
+    // Clear draft
+    clearDraft();
   };
 
-  const handleSaveSymptom = () => {
-    if (!extractedMetadata) {
-      setError('No symptom data to save');
-      return;
-    }
+  const handleResumeDraft = () => {
+    if (!pendingDraft) return;
 
-    try {
-      // Generate symptom ID
-      const symptomId = generateUUID();
-      let finalIssueId: string | undefined = undefined;
+    // Restore state from draft
+    setMessages(pendingDraft.messages);
+    setExtractedMetadata(pendingDraft.extractedMetadata);
+    setAdditionalInsights(pendingDraft.additionalInsights);
+    setQueuedSymptoms(pendingDraft.queuedSymptoms);
+    setSuggestedIssue(pendingDraft.suggestedIssue);
+    setIssueSelection(pendingDraft.issueSelection);
+    setConversationComplete(pendingDraft.conversationComplete);
 
-      // Handle new issue creation
-      if (selectedIssueId === '__new__') {
-        if (!newIssueName.trim()) {
-          setError('Please provide a name for the new issue');
-          return;
+    // Close dialog
+    setShowResumeDialog(false);
+    setPendingDraft(null);
+  };
+
+  const handleStartFresh = () => {
+    // Clear draft and start fresh
+    clearDraft();
+    setShowResumeDialog(false);
+    setPendingDraft(null);
+  };
+
+  // Auto-save when conversation is complete
+  useEffect(() => {
+    if (!conversationComplete || !extractedMetadata) return;
+
+    const saveSymptomEntry = async () => {
+      try {
+        // Generate symptom ID
+        const symptomId = generateUUID();
+        let finalIssueId: string | undefined = undefined;
+
+        // Handle issue selection from conversation
+        if (issueSelection) {
+          if (issueSelection.type === 'new') {
+            // Create new issue
+            if (!issueSelection.newIssueName || !issueSelection.newIssueStartDate) {
+              setError('Missing issue details for new issue');
+              return;
+            }
+
+            const newIssue: Issue = {
+              id: generateUUID(),
+              name: issueSelection.newIssueName,
+              status: 'active',
+              startDate: issueSelection.newIssueStartDate,
+              createdAt: new Date(),
+              symptomIds: [symptomId],
+            };
+
+            saveIssue(newIssue);
+            finalIssueId = newIssue.id;
+
+            // Refresh issues list
+            setIssues(getEnrichedIssues('active'));
+          } else if (issueSelection.type === 'existing' && issueSelection.existingIssueId) {
+            // Map issue name to UUID (LLM uses names, code needs UUIDs)
+            const issueIdOrName = issueSelection.existingIssueId;
+            const matchedIssue = issues.find(i =>
+              i.id === issueIdOrName || // Support UUID if LLM happens to return it
+              i.name.toLowerCase() === issueIdOrName.toLowerCase() // Map name to UUID
+            );
+
+            if (matchedIssue) {
+              finalIssueId = matchedIssue.id;
+            } else {
+              setError(`Could not find issue "${issueSelection.existingIssueId}"`);
+              setConversationComplete(false); // Allow user to retry
+              return;
+            }
+          }
+          // type === 'none' means standalone symptom (no issue linkage)
         }
 
-        if (!newIssueStartDate) {
-          setError('Please provide a start date for the new issue');
-          return;
-        }
-
-        const newIssue: Issue = {
-          id: generateUUID(),
-          name: newIssueName.trim(),
-          status: 'active',
-          startDate: newIssueStartDate,
-          createdAt: new Date(),
-          symptomIds: [symptomId],
+        // Save symptom with issue linkage
+        const symptomEntry: SymptomEntry = {
+          id: symptomId,
+          timestamp: new Date(),
+          metadata: extractedMetadata,
+          additionalInsights,
+          conversationHistory: messages.map(m => m.content),
+          issueId: finalIssueId,
         };
 
-        saveIssue(newIssue);
-        finalIssueId = newIssue.id;
+        saveSymptom(symptomEntry);
 
-        // Refresh issues list
-        setIssues(getEnrichedIssues('active'));
-      } else if (selectedIssueId && selectedIssueId !== '__none__') {
-        // Link to existing issue
-        finalIssueId = selectedIssueId;
+        // Link to existing issue if selected
+        if (finalIssueId && issueSelection?.type === 'existing') {
+          linkSymptomToIssue(symptomId, finalIssueId);
+        }
+
+        // Clear draft after successful save
+        clearDraft();
+
+        // Notify parent component to refresh tables
+        onDataChange?.();
+
+        // Show success message
+        const issueMessage = finalIssueId
+          ? ` and linked to ${
+              issueSelection?.type === 'new'
+                ? issueSelection.newIssueName
+                : issues.find(i => i.id === finalIssueId)?.name
+            }`
+          : '';
+
+        // Check if there are queued symptoms
+        if (queuedSymptoms.length > 0) {
+          const nextSymptom = queuedSymptoms[0];
+          const remainingSymptoms = queuedSymptoms.slice(1);
+
+          // Show success and ask about next symptom
+          setSuccessMessage(`Symptom logged successfully${issueMessage}!`);
+
+          setTimeout(() => {
+            const confirmed = window.confirm(
+              `You also mentioned: "${nextSymptom}"\n\nWould you like to log that symptom now?`
+            );
+
+            if (confirmed) {
+              // Reset form but keep processing
+              setExtractedMetadata(null);
+              setAdditionalInsights({});
+              setConversationComplete(false);
+              setSuggestedIssue(null);
+              setIssueSelection(null);
+              setError(null);
+              setSuccessMessage(null);
+
+              // Update queue (remove the one we're about to log)
+              setQueuedSymptoms(remainingSymptoms);
+
+              // Start new conversation with queued symptom
+              const userMessage: ChatMessage = { role: 'user', content: nextSymptom };
+              setMessages([userMessage]);
+              setLoading(true);
+
+              // Process the queued symptom
+              processChatMessage([], nextSymptom, issues)
+                .then((result) => {
+                  setExtractedMetadata(result.extractedData.metadata);
+                  setAdditionalInsights(result.additionalInsights);
+                  setConversationComplete(result.extractedData.conversationComplete || false);
+
+                  // Handle new queued symptoms from this one
+                  if (result.extractedData.queuedSymptoms && result.extractedData.queuedSymptoms.length > 0) {
+                    setQueuedSymptoms([...remainingSymptoms, ...result.extractedData.queuedSymptoms]);
+                  }
+
+                  // Handle AI's issue suggestion
+                  if (result.extractedData.suggestedIssue) {
+                    setSuggestedIssue(result.extractedData.suggestedIssue);
+                  }
+
+                  // Handle issue selection
+                  if (result.extractedData.issueSelection) {
+                    setIssueSelection(result.extractedData.issueSelection);
+                  }
+
+                  // Add AI response
+                  if (result.extractedData.aiMessage) {
+                    setMessages([userMessage, { role: 'assistant', content: result.extractedData.aiMessage }]);
+                  }
+                })
+                .catch((err) => {
+                  setError(err instanceof Error ? err.message : 'An error occurred');
+                  setMessages([]);
+                })
+                .finally(() => {
+                  setLoading(false);
+                });
+            } else {
+              // User declined, clear queue and reset
+              setQueuedSymptoms([]);
+              handleReset();
+            }
+          }, 500);
+        } else {
+          // No queued symptoms, full reset
+          setSuccessMessage(`Symptom logged successfully${issueMessage}!`);
+          setTimeout(() => {
+            handleReset();
+          }, 2000);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to save symptom');
+        setConversationComplete(false); // Allow retry
       }
+    };
 
-      // Save symptom with issue linkage
-      const symptomEntry: SymptomEntry = {
-        id: symptomId,
-        timestamp: new Date(),
-        metadata: extractedMetadata,
-        additionalInsights,
-        conversationHistory: messages.map(m => m.content),
-        issueId: finalIssueId,
-      };
-
-      saveSymptom(symptomEntry);
-
-      // Link to existing issue if selected
-      if (finalIssueId && selectedIssueId !== '__new__') {
-        linkSymptomToIssue(symptomId, finalIssueId);
-      }
-
-      // Close dialog and reset form
-      setShowSaveDialog(false);
-      handleReset();
-
-      // Notify parent component to refresh tables
-      onDataChange?.();
-
-      // Show success message
-      const issueMessage = finalIssueId
-        ? ` and linked to ${selectedIssueId === '__new__' ? newIssueName : issues.find(i => i.id === finalIssueId)?.name}`
-        : '';
-      alert(`Symptom logged successfully${issueMessage}!`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save symptom');
-    }
-  };
-
-  const handleContinueEditing = () => {
-    setShowSaveDialog(false);
-    setConversationComplete(false);
-  };
-
-  const getSeverityBadge = (severity: number) => {
-    if (severity >= 7) return <Badge variant="destructive">{severity}/10</Badge>;
-    if (severity >= 4) return <Badge variant="default" className="bg-yellow-500">{severity}/10</Badge>;
-    return <Badge variant="secondary">{severity}/10</Badge>;
-  };
+    saveSymptomEntry();
+  }, [conversationComplete, extractedMetadata, issueSelection]);
 
   const quickPrompts = [
     'I have a bad headache',
@@ -249,7 +407,7 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
       <div className="flex-1 overflow-hidden flex flex-col">
 
         {/* Messages area */}
-        <ScrollArea className="flex-1 px-3 py-3">
+        <ScrollArea className="flex-1 px-6 py-6">
           {messages.map((message, index) => (
             <Message key={index} role={message.role} content={message.content} />
           ))}
@@ -270,7 +428,7 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
 
         {/* Error display */}
         {error && (
-          <div className="mx-3 mb-2">
+          <div className="mx-6 mb-4">
             <Alert variant="destructive">
               <AlertCircle className="h-3 w-3" />
               <AlertDescription className="text-xs">{error}</AlertDescription>
@@ -278,26 +436,19 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
           </div>
         )}
 
-        {/* Completion status - minimal */}
-        {conversationComplete && (
-          <div className="mx-3 mb-2 flex items-center justify-between px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-center gap-2">
+        {/* Success message */}
+        {successMessage && (
+          <div className="mx-6 mb-4">
+            <Alert className="bg-green-50 border-green-200">
               <CheckCircle2 className="h-3 w-3 text-green-600" />
-              <span className="text-xs text-green-900">Ready to save</span>
-            </div>
-            <Button
-              size="sm"
-              className="bg-blue-400 hover:bg-blue-500 text-xs h-7 px-3"
-              onClick={() => setShowSaveDialog(true)}
-            >
-              Save
-            </Button>
+              <AlertDescription className="text-xs text-green-900">{successMessage}</AlertDescription>
+            </Alert>
           </div>
         )}
 
         {/* Quick Prompts - only show when no messages */}
         {messages.length === 0 && (
-          <div className="px-3 pb-3">
+          <div className="px-6 pb-6">
             <div className="flex flex-wrap gap-2">
               {quickPrompts.map((prompt) => (
                 <button
@@ -313,7 +464,7 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
         )}
 
         {/* Input area - minimal */}
-        <div className="border-t border-gray-200 p-3">
+        <div className="border-t border-gray-200 p-6">
           <ChatInput
             value={input}
             onChange={setInput}
@@ -323,89 +474,38 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
         </div>
       </div>
 
-      {/* Save Confirmation Dialog */}
-      <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      {/* Resume Draft Dialog */}
+      <Dialog open={showResumeDialog} onOpenChange={setShowResumeDialog}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Symptom Entry</DialogTitle>
+            <DialogTitle>Resume Previous Conversation?</DialogTitle>
             <DialogDescription>
-              Please review your symptom information before saving.
+              You have an unfinished symptom entry from earlier. Would you like to continue where you left off?
             </DialogDescription>
           </DialogHeader>
 
-          {extractedMetadata && (
-            <div className="space-y-4 py-4">
-              {/* Primary Metadata */}
-              <div>
-                <h4 className="font-semibold mb-3">Symptom Details</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Location</p>
-                    <p className="font-medium">{extractedMetadata.location || 'Not provided'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Onset Date</p>
-                    <p className="font-medium">{extractedMetadata.onset || 'Not provided'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Severity</p>
-                    <div className="mt-1">
-                      {extractedMetadata.severity !== null && extractedMetadata.severity !== undefined
-                        ? getSeverityBadge(extractedMetadata.severity)
-                        : <span className="text-sm">Not provided</span>}
-                    </div>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-sm text-muted-foreground">Description</p>
-                    <p className="font-medium">{extractedMetadata.description || 'Not provided'}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Additional Insights */}
-              {Object.keys(additionalInsights).length > 0 && (
-                <>
-                  <Separator />
-                  <div>
-                    <h4 className="font-semibold mb-3">Additional Insights</h4>
-                    <div className="space-y-3">
-                      {Object.entries(additionalInsights).map(([key, value]) =>
-                        value ? (
-                          <div key={key}>
-                            <p className="text-sm text-muted-foreground">
-                              {key.charAt(0).toUpperCase() + key.slice(1)}
-                            </p>
-                            <p className="text-sm">{value}</p>
-                          </div>
-                        ) : null
-                      )}
-                    </div>
-                  </div>
-                </>
+          {pendingDraft && (
+            <div className="py-4">
+              <p className="text-sm text-muted-foreground mb-2">
+                Draft saved: {new Date(pendingDraft.timestamp).toLocaleString()}
+              </p>
+              <p className="text-sm">
+                <strong>Messages:</strong> {pendingDraft.messages.length}
+              </p>
+              {pendingDraft.extractedMetadata?.location && (
+                <p className="text-sm">
+                  <strong>Location:</strong> {pendingDraft.extractedMetadata.location}
+                </p>
               )}
-
-              {/* Issue Selector */}
-              <Separator />
-              <IssueSelector
-                issues={issues}
-                selectedIssueId={selectedIssueId}
-                onSelectIssue={setSelectedIssueId}
-                suggestedIssue={suggestedIssue}
-                newIssueName={newIssueName}
-                onNewIssueNameChange={setNewIssueName}
-                newIssueStartDate={newIssueStartDate}
-                onNewIssueStartDateChange={setNewIssueStartDate}
-              />
             </div>
           )}
 
           <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={handleContinueEditing}>
-              Continue Editing
+            <Button variant="outline" onClick={handleStartFresh}>
+              Start Fresh
             </Button>
-            <Button onClick={handleSaveSymptom}>
-              <Save className="h-4 w-4 mr-2" />
-              Save Symptom
+            <Button onClick={handleResumeDraft}>
+              Resume Draft
             </Button>
           </DialogFooter>
         </DialogContent>

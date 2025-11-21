@@ -87,6 +87,16 @@ export interface SymptomEntry {
 }
 
 /**
+ * Issue selection made through conversation
+ */
+export interface IssueSelection {
+  type: 'existing' | 'new' | 'none'; // What the user chose
+  existingIssueId?: string; // ID if linking to existing issue
+  newIssueName?: string; // Name if creating new issue
+  newIssueStartDate?: string; // Start date if creating new issue (ISO YYYY-MM-DD)
+}
+
+/**
  * Response from Claude API extraction
  */
 export interface ExtractionResponse {
@@ -94,6 +104,8 @@ export interface ExtractionResponse {
   aiMessage?: string; // AI's conversational response to the user
   conversationComplete?: boolean; // True when AI has all necessary information
   suggestedIssue?: SuggestedIssue; // AI's suggestion for issue relationship
+  queuedSymptoms?: string[]; // Additional symptoms to log after this one
+  issueSelection?: IssueSelection; // User's issue selection made through conversation
 }
 
 /**
