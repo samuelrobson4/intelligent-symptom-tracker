@@ -391,12 +391,12 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] bg-white border border-gray-200 rounded-lg">
+    <div className="flex flex-col h-[500px] sm:h-[600px] lg:h-[calc(100vh-120px)] bg-white border border-gray-200 rounded-lg">
       {/* Agent Header - Minimal */}
-      <div className="flex items-center gap-3 p-3 border-b border-gray-200">
-        <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-xs font-semibold relative">
+      <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 border-b border-gray-200">
+        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-xs font-semibold relative">
           S
-          <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
+          <div className="absolute top-0 right-0 w-2 h-2 sm:w-2.5 sm:h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
         </div>
         <div>
           <div className="text-xs font-semibold text-gray-900">Symptom Agent</div>
@@ -406,15 +406,15 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
 
       <div className="flex-1 overflow-hidden flex flex-col">
 
-        {/* Messages area */}
-        <ScrollArea className="flex-1 px-6 py-6">
+        {/* Messages area with responsive padding */}
+        <ScrollArea className="flex-1 px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6">
           {messages.map((message, index) => (
             <Message key={index} role={message.role} content={message.content} />
           ))}
 
           {loading && (
             <div className="flex justify-start mb-3">
-              <div className="bg-gray-100 rounded-2xl px-3 py-1.5 max-w-[80%]">
+              <div className="bg-gray-100 rounded-2xl px-3 py-1.5 max-w-[85%] sm:max-w-[80%]">
                 <div className="flex items-center gap-2">
                   <Loader2 className="h-3 w-3 animate-spin text-gray-500" />
                   <span className="text-xs text-gray-600">Typing...</span>
@@ -428,7 +428,7 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
 
         {/* Error display */}
         {error && (
-          <div className="mx-6 mb-4">
+          <div className="mx-3 sm:mx-4 md:mx-6 mb-3 sm:mb-4">
             <Alert variant="destructive">
               <AlertCircle className="h-3 w-3" />
               <AlertDescription className="text-xs">{error}</AlertDescription>
@@ -438,7 +438,7 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
 
         {/* Success message */}
         {successMessage && (
-          <div className="mx-6 mb-4">
+          <div className="mx-3 sm:mx-4 md:mx-6 mb-3 sm:mb-4">
             <Alert className="bg-green-50 border-green-200">
               <CheckCircle2 className="h-3 w-3 text-green-600" />
               <AlertDescription className="text-xs text-green-900">{successMessage}</AlertDescription>
@@ -448,13 +448,13 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
 
         {/* Quick Prompts - only show when no messages */}
         {messages.length === 0 && (
-          <div className="px-6 pb-6">
-            <div className="flex flex-wrap gap-2">
+          <div className="px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 md:pb-6">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
               {quickPrompts.map((prompt) => (
                 <button
                   key={prompt}
                   onClick={() => setInput(prompt)}
-                  className="px-3 py-1.5 text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+                  className="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
                 >
                   {prompt}
                 </button>
@@ -463,8 +463,8 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
           </div>
         )}
 
-        {/* Input area - minimal */}
-        <div className="border-t border-gray-200 p-6">
+        {/* Input area - minimal with responsive padding */}
+        <div className="border-t border-gray-200 p-3 sm:p-4 md:p-6">
           <ChatInput
             value={input}
             onChange={setInput}

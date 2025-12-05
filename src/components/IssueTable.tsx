@@ -156,40 +156,90 @@ export function IssueTable({ refreshTrigger = 0 }: IssueTableProps) {
         </div>
       )}
 
-      {/* Table - Minimal design */}
-      <div className="bg-white">
-        {/* Column Headers */}
-        <div className="grid grid-cols-6 gap-3 px-3 py-2 border-b border-gray-200">
-          <div className="text-sm font-medium text-gray-500">Issue Name</div>
-          <div className="text-sm font-medium text-gray-500">Status</div>
-          <div className="text-sm font-medium text-gray-500">Start Date</div>
-          <div className="text-sm font-medium text-gray-500">Total Entries</div>
-          <div className="text-sm font-medium text-gray-500">Last Entry</div>
-          <div className="text-sm font-medium text-gray-500 text-right">Actions</div>
+      {/* Table - Minimal design with responsive layout */}
+      <div className="bg-white overflow-x-auto">
+        {/* Desktop Table View - Hidden on mobile */}
+        <div className="hidden md:block">
+          {/* Column Headers */}
+          <div className="grid grid-cols-6 gap-3 px-3 py-2 border-b border-gray-200">
+            <div className="text-sm font-medium text-gray-500">Issue Name</div>
+            <div className="text-sm font-medium text-gray-500">Status</div>
+            <div className="text-sm font-medium text-gray-500">Start Date</div>
+            <div className="text-sm font-medium text-gray-500">Total Entries</div>
+            <div className="text-sm font-medium text-gray-500">Last Entry</div>
+            <div className="text-sm font-medium text-gray-500 text-right">Actions</div>
+          </div>
+
+          {/* Data Rows */}
+          <div className="divide-y divide-gray-100">
+            {paginatedIssues.length > 0 ? (
+              paginatedIssues.map((issue) => {
+                const stats = getIssueStats(issue.id);
+                return (
+                  <div key={issue.id} className="grid grid-cols-6 gap-3 px-3 py-2 hover:bg-gray-50">
+                    <div className="text-sm text-gray-900">{issue.name}</div>
+                    <div className="text-sm text-gray-900 capitalize">{issue.status}</div>
+                    <div className="text-sm text-gray-900">{formatDate(issue.startDate)}</div>
+                    <div className="text-sm text-gray-900">
+                      {stats.totalEntries}
+                      {stats.totalEntries > 0 && stats.avgSeverity > 0 && (
+                        <span className="text-gray-500 ml-1">
+                          (avg {stats.avgSeverity})
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-900">
+                      {issue.lastEntry ? `${issue.lastEntry.daysAgo}d ago` : '-'}
+                    </div>
+                    <div className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedIssue(issue);
+                          setShowDetailsDialog(true);
+                        }}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Eye className="h-3 w-3 text-gray-500" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="px-3 py-6 text-center text-gray-500 text-sm">
+                No issues found
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Data Rows */}
-        <div className="divide-y divide-gray-100">
+        {/* Mobile Card View - Visible on mobile only */}
+        <div className="md:hidden divide-y divide-gray-100">
           {paginatedIssues.length > 0 ? (
             paginatedIssues.map((issue) => {
               const stats = getIssueStats(issue.id);
               return (
-                <div key={issue.id} className="grid grid-cols-6 gap-3 px-3 py-2 hover:bg-gray-50">
-                  <div className="text-sm text-gray-900">{issue.name}</div>
-                  <div className="text-sm text-gray-900 capitalize">{issue.status}</div>
-                  <div className="text-sm text-gray-900">{formatDate(issue.startDate)}</div>
-                  <div className="text-sm text-gray-900">
-                    {stats.totalEntries}
-                    {stats.totalEntries > 0 && stats.avgSeverity > 0 && (
-                      <span className="text-gray-500 ml-1">
-                        (avg {stats.avgSeverity})
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-900">
-                    {issue.lastEntry ? `${issue.lastEntry.daysAgo}d ago` : '-'}
-                  </div>
-                  <div className="text-right">
+                <div key={issue.id} className="p-3 space-y-2">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1 flex-1">
+                      <div className="text-sm font-medium text-gray-900">
+                        {issue.name}
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                        <span className="capitalize px-2 py-0.5 bg-gray-100 rounded">
+                          {issue.status}
+                        </span>
+                        <span>Started: {formatDate(issue.startDate)}</span>
+                      </div>
+                      <div className="flex gap-3 text-xs text-gray-600">
+                        <span>{stats.totalEntries} entries</span>
+                        {issue.lastEntry && (
+                          <span>Last: {issue.lastEntry.daysAgo}d ago</span>
+                        )}
+                      </div>
+                    </div>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -197,9 +247,9 @@ export function IssueTable({ refreshTrigger = 0 }: IssueTableProps) {
                         setSelectedIssue(issue);
                         setShowDetailsDialog(true);
                       }}
-                      className="h-6 w-6 p-0"
+                      className="h-7 w-7 p-0 ml-2"
                     >
-                      <Eye className="h-3 w-3 text-gray-500" />
+                      <Eye className="h-3.5 w-3.5 text-gray-500" />
                     </Button>
                   </div>
                 </div>
@@ -211,6 +261,7 @@ export function IssueTable({ refreshTrigger = 0 }: IssueTableProps) {
             </div>
           )}
         </div>
+      </div>
 
         {/* Pagination */}
         {totalPages > 1 && (

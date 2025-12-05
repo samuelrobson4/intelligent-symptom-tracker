@@ -246,37 +246,93 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
         </div>
       )}
 
-      {/* Table - Minimal design */}
-      <div className="bg-white">
-        {/* Column Headers */}
-        <div className="grid grid-cols-6 gap-3 px-3 py-2 border-b border-gray-200">
-          <div className="text-sm font-medium text-gray-500">Date</div>
-          <div className="text-sm font-medium text-gray-500">Location</div>
-          <div className="text-sm font-medium text-gray-500">Severity</div>
-          <div className="text-sm font-medium text-gray-500 col-span-2">Description</div>
-          <div className="text-sm font-medium text-gray-500 text-right">Actions</div>
+      {/* Table - Minimal design with responsive layout */}
+      <div className="bg-white overflow-x-auto">
+        {/* Desktop Table View - Hidden on mobile */}
+        <div className="hidden md:block">
+          {/* Column Headers */}
+          <div className="grid grid-cols-6 gap-3 px-3 py-2 border-b border-gray-200">
+            <div className="text-sm font-medium text-gray-500">Date</div>
+            <div className="text-sm font-medium text-gray-500">Location</div>
+            <div className="text-sm font-medium text-gray-500">Severity</div>
+            <div className="text-sm font-medium text-gray-500 col-span-2">Description</div>
+            <div className="text-sm font-medium text-gray-500 text-right">Actions</div>
+          </div>
+
+          {/* Data Rows */}
+          <div className="divide-y divide-gray-100">
+            {symptoms.length > 0 ? (
+              symptoms.map((symptom) => {
+                return (
+                  <div key={symptom.id} className="grid grid-cols-6 gap-3 px-3 py-2 hover:bg-gray-50">
+                    <div className="text-sm text-gray-900">
+                      {formatDate(symptom.timestamp)}
+                    </div>
+                    <div className="text-sm text-gray-900 capitalize">
+                      {symptom.metadata.location.replace(/_/g, ' ')}
+                    </div>
+                    <div className="text-sm text-gray-900">
+                      {symptom.metadata.severity}/10
+                    </div>
+                    <div className="text-sm text-gray-900 col-span-2 truncate">
+                      {symptom.metadata.description || '-'}
+                    </div>
+                    <div className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedSymptom(symptom);
+                            setShowDetailsDialog(true);
+                          }}
+                          className="h-6 w-6 p-0"
+                        >
+                          <Eye className="h-3 w-3 text-gray-500" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSymptomToDelete(symptom)}
+                          className="h-6 w-6 p-0"
+                        >
+                          <Trash2 className="h-3 w-3 text-gray-500" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="px-3 py-6 text-center text-gray-500 text-sm">
+                No symptoms found
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Data Rows */}
-        <div className="divide-y divide-gray-100">
+        {/* Mobile Card View - Visible on mobile only */}
+        <div className="md:hidden divide-y divide-gray-100">
           {symptoms.length > 0 ? (
             symptoms.map((symptom) => {
               return (
-                <div key={symptom.id} className="grid grid-cols-6 gap-3 px-3 py-2 hover:bg-gray-50">
-                  <div className="text-sm text-gray-900">
-                    {formatDate(symptom.timestamp)}
-                  </div>
-                  <div className="text-sm text-gray-900 capitalize">
-                    {symptom.metadata.location.replace(/_/g, ' ')}
-                  </div>
-                  <div className="text-sm text-gray-900">
-                    {symptom.metadata.severity}/10
-                  </div>
-                  <div className="text-sm text-gray-900 col-span-2 truncate">
-                    {symptom.metadata.description || '-'}
-                  </div>
-                  <div className="text-right">
-                    <div className="flex justify-end gap-1">
+                <div key={symptom.id} className="p-3 space-y-2">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1 flex-1">
+                      <div className="text-xs text-gray-500">
+                        {formatDate(symptom.timestamp)}
+                      </div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {symptom.metadata.description || '-'}
+                      </div>
+                      <div className="flex gap-3 text-xs text-gray-600">
+                        <span className="capitalize">
+                          {symptom.metadata.location.replace(/_/g, ' ')}
+                        </span>
+                        <span>Severity: {symptom.metadata.severity}/10</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-1 ml-2">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -284,17 +340,17 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
                           setSelectedSymptom(symptom);
                           setShowDetailsDialog(true);
                         }}
-                        className="h-6 w-6 p-0"
+                        className="h-7 w-7 p-0"
                       >
-                        <Eye className="h-3 w-3 text-gray-500" />
+                        <Eye className="h-3.5 w-3.5 text-gray-500" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setSymptomToDelete(symptom)}
-                        className="h-6 w-6 p-0"
+                        className="h-7 w-7 p-0"
                       >
-                        <Trash2 className="h-3 w-3 text-gray-500" />
+                        <Trash2 className="h-3.5 w-3.5 text-gray-500" />
                       </Button>
                     </div>
                   </div>
@@ -307,6 +363,7 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
             </div>
           )}
         </div>
+      </div>
 
         {/* Pagination */}
         {totalPages > 1 && (
