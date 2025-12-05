@@ -365,19 +365,18 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
         </div>
       </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="border-t border-gray-200 mt-2">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={total}
-              itemsPerPage={filters.limit || 10}
-              onPageChange={handlePageChange}
-            />
-          </div>
-        )}
-      </div>
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="border-t border-gray-200 mt-2">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={total}
+            itemsPerPage={filters.limit || 10}
+            onPageChange={handlePageChange}
+          />
+        </div>
+      )}
 
       {/* Dialogs */}
       <SymptomDetailsDialog

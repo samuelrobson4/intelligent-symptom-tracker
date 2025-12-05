@@ -263,19 +263,18 @@ export function IssueTable({ refreshTrigger = 0 }: IssueTableProps) {
         </div>
       </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="border-t border-gray-200 mt-2">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={filteredIssues.length}
-              itemsPerPage={itemsPerPage}
-              onPageChange={setCurrentPage}
-            />
-          </div>
-        )}
-      </div>
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="border-t border-gray-200 mt-2">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredIssues.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
+        </div>
+      )}
 
       {/* Dialog */}
       <IssueDetailsDialog
