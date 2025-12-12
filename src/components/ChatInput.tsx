@@ -1,7 +1,6 @@
-/**
- * Chat input component with send button
- * Handles user input and message sending
- */
+// Chat input component with send button
+// Handles user input and message sending
+
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

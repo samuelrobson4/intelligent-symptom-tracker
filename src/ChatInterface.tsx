@@ -1,7 +1,5 @@
-/**
- * Chat-based interface for conversational symptom logging
- * Upgraded with shadcn/ui components
- */
+// Chat-based interface for conversational symptom logging
+// Upgraded with shadcn/ui components
 
 import { useState, useRef, useEffect } from 'react';
 import { processChatMessage, ConversationMessage } from '@/claudeService';
@@ -311,7 +309,7 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
             );
 
             if (confirmed) {
-              // Reset form but keep processing
+              // Reset form but keep conversation going
               setExtractedMetadata(null);
               setAdditionalInsights({});
               setConversationComplete(false);
@@ -323,13 +321,14 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
               // Update queue (remove the one we're about to log)
               setQueuedSymptoms(remainingSymptoms);
 
-              // Start new conversation with queued symptom
+              // Continue conversation with queued symptom
               const userMessage: ChatMessage = { role: 'user', content: nextSymptom };
-              setMessages([userMessage]);
+              const updatedMessages = [...messages, userMessage];
+              setMessages(updatedMessages);
               setLoading(true);
 
-              // Process the queued symptom
-              processChatMessage([], nextSymptom, issues)
+              // Process the queued symptom with conversation history
+              processChatMessage(messages, nextSymptom, issues)
                 .then((result) => {
                   setExtractedMetadata(result.extractedData.metadata);
                   setAdditionalInsights(result.additionalInsights);
@@ -352,7 +351,7 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
 
                   // Add AI response
                   if (result.extractedData.aiMessage) {
-                    setMessages([userMessage, { role: 'assistant', content: result.extractedData.aiMessage }]);
+                    setMessages([...updatedMessages, { role: 'assistant', content: result.extractedData.aiMessage }]);
                   }
                 })
                 .catch((err) => {

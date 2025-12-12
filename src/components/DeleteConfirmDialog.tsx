@@ -1,6 +1,5 @@
-/**
- * Reusable delete confirmation dialog
- */
+// Reusable delete confirmation dialog
+
 
 import {
   Dialog,

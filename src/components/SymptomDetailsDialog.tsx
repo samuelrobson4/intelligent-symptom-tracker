@@ -1,6 +1,5 @@
-/**
- * Dialog to view full symptom entry details
- */
+// Dialog to view full symptom entry details
+
 
 import {
   Dialog,

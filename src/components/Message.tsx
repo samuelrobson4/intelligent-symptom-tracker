@@ -1,7 +1,6 @@
-/**
- * Message component for chat interface
- * Clean, minimal bubble design
- */
+// Message component for chat interface
+// Clean, minimal bubble design
+
 
 import { cn } from "@/lib/utils";
 

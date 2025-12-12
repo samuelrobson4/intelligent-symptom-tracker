@@ -1,13 +1,17 @@
-/**
- * Claude API service for extracting symptom metadata from natural language
- */
+// Claude API service for extracting symptom metadata from natural language
 
 import Anthropic from '@anthropic-ai/sdk';
 import { ExtractionResponse, AdditionalInsights } from './types';
-import { EnrichedIssue } from './localStorage';
-import { getConversationalPrompt, RETRY_PROMPT } from './promptTemplates';
+import { EnrichedIssue, getSymptoms } from './localStorage';
+import { getConversationalPrompt, RETRY_PROMPT, TOOL_DEFINITIONS } from './promptTemplates';
 import { parseAndValidate, generateErrorFeedback } from './validators';
 import { createTrace, logGeneration, logEvent, updateTrace, isLangfuseEnabled } from './langfuse';
+import { executeToolCall } from './toolHandlers';
+
+// Use Anthropic SDK types for content blocks
+type ToolUseBlock = Anthropic.ToolUseBlock;
+type ToolResultBlockParam = Anthropic.ToolResultBlockParam;
+type TextBlock = Anthropic.TextBlock;
 
 const API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
 
@@ -20,10 +24,8 @@ const client = new Anthropic({
   dangerouslyAllowBrowser: true, // Note: In production, use a backend proxy
 });
 
-/**
- * Process a conversational message and extract/update symptom metadata
- * This function maintains conversation context and gradually builds up the symptom data
- */
+// Process a conversational message and extract/update symptom metadata
+// This function maintains conversation context and gradually builds up the symptom data
 export interface ConversationMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -54,16 +56,19 @@ export async function processChatMessage(
       })
     : null;
 
+  // Fetch recent 5 symptom entries for prompt context
+  const allSymptoms = getSymptoms();
+  const recentHistory = allSymptoms
+    .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+    .slice(0, 5);
+
+  // Generate system prompt with context
+  const systemPrompt = getConversationalPrompt(activeIssues, recentHistory);
+
   // Build the conversation context for Claude
-  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  const messages: Anthropic.MessageParam[] = [];
 
-  // Add the system prompt as the first user message (with issue context)
-  messages.push({
-    role: 'user',
-    content: getConversationalPrompt(activeIssues),
-  });
-
-  // Add conversation history
+  // Add conversation history (no need to add system prompt as a message)
   for (const msg of conversationHistory) {
     messages.push({
       role: msg.role,
@@ -84,16 +89,12 @@ export async function processChatMessage(
       const response = await client.messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 2048,
+        system: systemPrompt, // Use proper system parameter
         messages: messages,
+        tools: TOOL_DEFINITIONS, // Enable tool use
       });
 
       const latencyMs = Date.now() - startTime;
-      const content = response.content[0];
-      if (content.type !== 'text') {
-        throw new Error('Unexpected response type from Claude');
-      }
-
-      let jsonText = content.text.trim();
 
       // Log Claude API call to Langfuse
       if (trace) {
@@ -102,18 +103,100 @@ export async function processChatMessage(
           name: `symptom-extraction-attempt-${attempt + 1}`,
           model: response.model,
           input: messages,
-          output: jsonText,
+          output: response.content,
           inputTokens: response.usage.input_tokens,
           outputTokens: response.usage.output_tokens,
           latencyMs,
-          promptName: 'conversational-extraction',
-          promptVersion: 'v1',
+          promptName: 'conversational-extraction-with-tools',
+          promptVersion: 'v2',
           metadata: {
             attempt: attempt + 1,
             maxRetries,
+            stopReason: response.stop_reason,
           },
         });
       }
+
+      // Handle tool_use responses
+      if (response.stop_reason === 'tool_use') {
+        // Extract tool use blocks
+        const toolUseBlocks = response.content.filter(
+          (block): block is ToolUseBlock => block.type === 'tool_use'
+        );
+
+        if (toolUseBlocks.length === 0) {
+          throw new Error('stop_reason was tool_use but no tool_use blocks found');
+        }
+
+        // Log tool use to Langfuse
+        if (trace) {
+          logEvent({
+            trace,
+            name: 'tool-use-detected',
+            level: 'DEFAULT',
+            metadata: {
+              toolCount: toolUseBlocks.length,
+              tools: toolUseBlocks.map(t => ({ name: t.name, id: t.id })),
+            },
+          });
+        }
+
+        // Execute all tool calls
+        const toolResults: ToolResultBlockParam[] = [];
+
+        for (const toolBlock of toolUseBlocks) {
+          console.log(`Executing tool: ${toolBlock.name}`, toolBlock.input);
+
+          const toolResult = await executeToolCall(toolBlock.name, toolBlock.input);
+
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: toolBlock.id,
+            content: toolResult,
+          });
+
+          // Log individual tool execution
+          if (trace) {
+            logEvent({
+              trace,
+              name: 'tool-executed',
+              level: 'DEFAULT',
+              metadata: {
+                toolName: toolBlock.name,
+                toolId: toolBlock.id,
+                input: toolBlock.input,
+                resultLength: toolResult.length,
+              },
+            });
+          }
+        }
+
+        // Add assistant's tool_use message and tool results to conversation
+        messages.push(
+          {
+            role: 'assistant',
+            content: response.content, // Contains tool_use blocks
+          },
+          {
+            role: 'user',
+            content: toolResults, // Send tool results back
+          }
+        );
+
+        // Continue the loop to get Claude's final response after tool use
+        continue;
+      }
+
+      // Standard text response handling
+      const textContent = response.content.find(
+        (block): block is TextBlock => block.type === 'text'
+      );
+
+      if (!textContent) {
+        throw new Error('No text content found in response');
+      }
+
+      let jsonText = textContent.text.trim();
 
       // Remove markdown code blocks if present
       if (jsonText.startsWith('```json')) {

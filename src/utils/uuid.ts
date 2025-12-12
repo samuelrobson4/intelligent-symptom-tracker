@@ -1,11 +1,9 @@
-/**
- * UUID generation utility
- */
+// UUID generation utility
 
-/**
- * Generate a UUID v4 string
- * Uses the browser's crypto.randomUUID() if available
- */
+
+// Generate a UUID v4 string
+// Uses the browser's crypto.randomUUID() if available
+
 export function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();

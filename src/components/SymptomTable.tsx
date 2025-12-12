@@ -1,6 +1,5 @@
-/**
- * Paginated and filterable symptom log table
- */
+// Paginated and filterable symptom log table
+
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';

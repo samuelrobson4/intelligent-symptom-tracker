@@ -1,6 +1,5 @@
-/**
- * Reusable pagination component for tables
- */
+// Reusable pagination component for tables
+
 
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';

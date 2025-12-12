@@ -1,6 +1,4 @@
-/**
- * LocalStorage persistence layer for symptoms and issues
- */
+// LocalStorage persistence layer for symptoms and issues
 
 import { SymptomEntry, Issue, SymptomMetadata, AdditionalInsights, SuggestedIssue, IssueSelection } from './types';
 import { generateUUID } from './utils/uuid';
@@ -14,9 +12,7 @@ interface StorageData {
   issues: Issue[];
 }
 
-/**
- * Get all data from localStorage
- */
+// Get all data from localStorage
 function getData(): StorageData {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
@@ -44,9 +40,7 @@ function getData(): StorageData {
   }
 }
 
-/**
- * Save all data to localStorage
- */
+// Save all data to localStorage
 function setData(data: StorageData): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -55,9 +49,7 @@ function setData(data: StorageData): void {
   }
 }
 
-/**
- * Save a symptom entry
- */
+// Save a symptom entry
 export function saveSymptom(entry: SymptomEntry): void {
   const data = getData();
 
@@ -75,9 +67,7 @@ export function saveSymptom(entry: SymptomEntry): void {
   setData(data);
 }
 
-/**
- * Get all symptoms, optionally filtered by issue
- */
+// Get all symptoms, optionally filtered by issue
 export function getSymptoms(issueId?: string): SymptomEntry[] {
   const data = getData();
 
@@ -88,17 +78,13 @@ export function getSymptoms(issueId?: string): SymptomEntry[] {
   return data.symptoms;
 }
 
-/**
- * Get a single symptom by ID
- */
+// Get a single symptom by ID
 export function getSymptom(id: string): SymptomEntry | null {
   const data = getData();
   return data.symptoms.find(s => s.id === id) || null;
 }
 
-/**
- * Delete a symptom by ID
- */
+// Delete a symptom by ID
 export function deleteSymptom(id: string): void {
   const data = getData();
 
@@ -119,9 +105,7 @@ export function deleteSymptom(id: string): void {
   setData(data);
 }
 
-/**
- * Save an issue
- */
+// Save an issue
 export function saveIssue(issue: Issue): void {
   const data = getData();
 
@@ -144,9 +128,7 @@ export function saveIssue(issue: Issue): void {
   setData(data);
 }
 
-/**
- * Get all issues, optionally filtered by status
- */
+// Get all issues, optionally filtered by status
 export function getIssues(status?: 'active' | 'resolved'): Issue[] {
   const data = getData();
 
@@ -157,17 +139,13 @@ export function getIssues(status?: 'active' | 'resolved'): Issue[] {
   return data.issues;
 }
 
-/**
- * Get a single issue by ID
- */
+// Get a single issue by ID
 export function getIssue(id: string): Issue | null {
   const data = getData();
   return data.issues.find(i => i.id === id) || null;
 }
 
-/**
- * Update an issue (partial update)
- */
+// Update an issue (partial update)
 export function updateIssue(id: string, updates: Partial<Omit<Issue, 'id' | 'createdAt'>>): void {
   const data = getData();
   const issueIndex = data.issues.findIndex(i => i.id === id);
@@ -187,9 +165,7 @@ export function updateIssue(id: string, updates: Partial<Omit<Issue, 'id' | 'cre
   setData(data);
 }
 
-/**
- * Delete an issue and unlink all associated symptoms
- */
+// Delete an issue and unlink all associated symptoms
 export function deleteIssue(id: string): void {
   const data = getData();
 
@@ -206,9 +182,7 @@ export function deleteIssue(id: string): void {
   setData(data);
 }
 
-/**
- * Link a symptom to an issue
- */
+// Link a symptom to an issue
 export function linkSymptomToIssue(symptomId: string, issueId: string): void {
   const data = getData();
 
@@ -235,9 +209,7 @@ export function linkSymptomToIssue(symptomId: string, issueId: string): void {
   setData(data);
 }
 
-/**
- * Unlink a symptom from its issue
- */
+// Unlink a symptom from its issue
 export function unlinkSymptomFromIssue(symptomId: string): void {
   const data = getData();
 
@@ -258,9 +230,7 @@ export function unlinkSymptomFromIssue(symptomId: string): void {
   setData(data);
 }
 
-/**
- * Get the most recent symptom entry for an issue
- */
+// Get the most recent symptom entry for an issue
 export function getMostRecentSymptomForIssue(issueId: string): SymptomEntry | null {
   const symptoms = getSymptoms(issueId);
   if (symptoms.length === 0) return null;
@@ -269,9 +239,7 @@ export function getMostRecentSymptomForIssue(issueId: string): SymptomEntry | nu
   return symptoms.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())[0];
 }
 
-/**
- * Enriched issue with recent symptom information
- */
+// Enriched issue with recent symptom information
 export interface EnrichedIssue extends Issue {
   lastEntry?: {
     date: string; // ISO date
@@ -280,9 +248,7 @@ export interface EnrichedIssue extends Issue {
   };
 }
 
-/**
- * Get issues enriched with recent symptom data
- */
+// Get issues enriched with recent symptom data
 export function getEnrichedIssues(status?: 'active' | 'resolved'): EnrichedIssue[] {
   const issues = getIssues(status);
   const today = new Date();
@@ -313,9 +279,7 @@ export function getEnrichedIssues(status?: 'active' | 'resolved'): EnrichedIssue
   });
 }
 
-/**
- * Get symptoms with pagination and filtering
- */
+// Get symptoms with pagination and filtering
 export interface SymptomFilterOptions {
   page?: number;
   limit?: number;
@@ -394,9 +358,7 @@ export function getFilteredSymptoms(
   };
 }
 
-/**
- * Get issue statistics
- */
+// Get issue statistics
 export function getIssueStats(issueId: string): {
   totalEntries: number;
   avgSeverity: number;
@@ -426,9 +388,7 @@ export function getIssueStats(issueId: string): {
   };
 }
 
-/**
- * Mark an issue as resolved
- */
+// Mark an issue as resolved
 export function resolveIssue(issueId: string, endDate: string): void {
   updateIssue(issueId, {
     status: 'resolved',
@@ -436,21 +396,15 @@ export function resolveIssue(issueId: string, endDate: string): void {
   });
 }
 
-/**
- * Generate a new UUID for entities
- */
+// Generate a new UUID for entities
 export { generateUUID };
 
-/**
- * Clear all data (for testing/debugging)
- */
+// Clear all data (for testing/debugging)
 export function clearAllData(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-/**
- * Draft conversation state for autosave/resume
- */
+// Draft conversation state for autosave/resume
 export interface ConversationDraft {
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
   extractedMetadata: SymptomMetadata | null;
@@ -462,9 +416,7 @@ export interface ConversationDraft {
   timestamp: Date;
 }
 
-/**
- * Save current conversation state as draft
- */
+// Save current conversation state as draft
 export function saveDraft(draft: ConversationDraft): void {
   try {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
@@ -473,9 +425,7 @@ export function saveDraft(draft: ConversationDraft): void {
   }
 }
 
-/**
- * Get saved draft from localStorage
- */
+// Get saved draft from localStorage
 export function getDraft(): ConversationDraft | null {
   try {
     const data = localStorage.getItem(DRAFT_KEY);
@@ -495,9 +445,7 @@ export function getDraft(): ConversationDraft | null {
   }
 }
 
-/**
- * Clear saved draft
- */
+// Clear saved draft
 export function clearDraft(): void {
   try {
     localStorage.removeItem(DRAFT_KEY);
@@ -506,9 +454,7 @@ export function clearDraft(): void {
   }
 }
 
-/**
- * Check if draft is expired (older than 24 hours)
- */
+// Check if draft is expired (older than 24 hours)
 export function isDraftExpired(draft: ConversationDraft): boolean {
   const now = new Date();
   const draftAge = now.getTime() - draft.timestamp.getTime();

@@ -1,13 +1,11 @@
-/**
- * Validation logic for symptom metadata
- * Ensures Claude's responses conform to controlled vocabularies
- */
+// Validation logic for symptom metadata
+// Ensures Claude's responses conform to controlled vocabularies
+
 
 import { Location, SymptomMetadata, ValidationResult } from './types';
 
-/**
- * Check if a value is a valid Location enum value
- */
+// Check if a value is a valid Location enum value
+
 function isValidLocation(value: unknown): value is Location {
   return (
     typeof value === 'string' &&
@@ -15,9 +13,8 @@ function isValidLocation(value: unknown): value is Location {
   );
 }
 
-/**
- * Check if a value is a valid Severity (0-10)
- */
+// Check if a value is a valid Severity (0-10)
+
 function isValidSeverity(value: unknown): value is number {
   return (
     typeof value === 'number' &&
@@ -27,9 +24,8 @@ function isValidSeverity(value: unknown): value is number {
   );
 }
 
-/**
- * Check if a value is a valid ISO date string (YYYY-MM-DD)
- */
+// Check if a value is a valid ISO date string (YYYY-MM-DD)
+
 function isValidOnsetDate(value: unknown): value is string {
   if (typeof value !== 'string') return false;
 
@@ -49,11 +45,10 @@ function isValidOnsetDate(value: unknown): value is string {
   return true;
 }
 
-/**
- * Parse and validate symptom metadata from Claude's response
- * Returns either validated data or an error message
- * Note: Fields can be null if not yet collected in conversation
- */
+// Parse and validate symptom metadata from Claude's response
+// Returns either validated data or an error message
+// Note: Fields can be null if not yet collected in conversation
+
 export function parseAndValidate(data: unknown): ValidationResult {
   try {
     // Check if data is an object
@@ -126,9 +121,8 @@ export function parseAndValidate(data: unknown): ValidationResult {
   }
 }
 
-/**
- * Validate that a JSON string is properly formatted
- */
+// Validate that a JSON string is properly formatted
+
 export function validateJSON(jsonString: string): { valid: boolean; error?: string } {
   try {
     JSON.parse(jsonString);
@@ -141,9 +135,8 @@ export function validateJSON(jsonString: string): { valid: boolean; error?: stri
   }
 }
 
-/**
- * Generate a helpful error message for the model to correct its response
- */
+// Generate a helpful error message for the model to correct its response
+
 export function generateErrorFeedback(validationResult: ValidationResult): string {
   if (validationResult.success) {
     return '';

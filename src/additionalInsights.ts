@@ -1,19 +1,16 @@
-/**
- * Additional insights collection logic
- * Determines when to ask deeper follow-up questions and manages the question flow
- */
+// Additional insights collection logic
+// Determines when to ask deeper follow-up questions and manages the question flow
+
 
 import { SymptomMetadata, Location, AdditionalInsights } from './types';
 import { ADDITIONAL_QUESTIONS } from './promptTemplates';
 
-/**
- * Critical locations that warrant deeper investigation
- */
+// Critical locations that warrant deeper investigation
+
 const CRITICAL_LOCATIONS = [Location.CHEST, Location.ABDOMEN, Location.HEAD];
 
-/**
- * Calculate days since onset from ISO date string
- */
+// Calculate days since onset from ISO date string
+
 function getDaysSinceOnset(onsetDate: string): number {
   const onset = new Date(onsetDate);
   const today = new Date();
@@ -22,14 +19,11 @@ function getDaysSinceOnset(onsetDate: string): number {
   return diffDays;
 }
 
-/**
- * Determine if additional insight questions should be triggered
- *
- * Triggers when:
- * - Severity ≥ 7
- * - Onset > 5 days ago
- * - Pain in critical locations (chest, abdomen, head)
- */
+// Determine if additional insight questions should be triggered
+// Triggers when:
+// - Severity ≥ 7
+// - Onset > 5 days ago
+// - Pain in critical locations (chest, abdomen, head)
 export function shouldCollectAdditionalInsights(metadata: SymptomMetadata): boolean {
   // High severity symptoms
   if (metadata.severity >= 7) {
@@ -52,10 +46,9 @@ export function shouldCollectAdditionalInsights(metadata: SymptomMetadata): bool
   return false;
 }
 
-/**
- * Get the list of additional insight questions to ask
- * Returns an array of question keys and text
- */
+// Get the list of additional insight questions to ask
+// Returns an array of question keys and text
+
 export function getAdditionalQuestions(): Array<{
   key: keyof AdditionalInsights;
   question: string;
@@ -68,9 +61,8 @@ export function getAdditionalQuestions(): Array<{
   ];
 }
 
-/**
- * Format additional insights for display
- */
+// Format additional insights for display
+
 export function formatAdditionalInsights(insights: AdditionalInsights): string {
   const sections: string[] = [];
 
@@ -90,9 +82,8 @@ export function formatAdditionalInsights(insights: AdditionalInsights): string {
   return sections.join('\n');
 }
 
-/**
- * Get a friendly explanation of why additional questions are being asked
- */
+// Get a friendly explanation of why additional questions are being asked
+
 export function getAdditionalQuestionsRationale(metadata: SymptomMetadata): string {
   const reasons: string[] = [];
 

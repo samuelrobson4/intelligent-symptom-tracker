@@ -1,6 +1,5 @@
-/**
- * Dialog to view and manage issue details
- */
+// Dialog to view and manage issue details
+
 
 import { useState } from 'react';
 import {

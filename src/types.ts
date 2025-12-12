@@ -1,6 +1,4 @@
-/**
- * Core type definitions for the Conversational Symptom Logger
- */
+// Core type definitions for the Conversational Symptom Logger
 
 // Controlled vocabularies - Body locations
 export enum Location {
@@ -30,9 +28,7 @@ export enum Location {
 // Severity is 0-10, but we use a type alias for clarity
 export type Severity = number; // 0-10
 
-/**
- * Primary symptom metadata extracted from conversation
- */
+// Primary symptom metadata extracted from conversation
 export interface SymptomMetadata {
   location: Location;
   onset: string; // ISO date string (YYYY-MM-DD)
@@ -40,10 +36,8 @@ export interface SymptomMetadata {
   description?: string; // The original user description
 }
 
-/**
- * Additional insights about the symptom
- * Collected for more severe or chronic symptoms
- */
+// Additional insights about the symptom
+// Collected for more severe or chronic symptoms
 export interface AdditionalInsights {
   provocation?: string; // What makes it better or worse?
   quality?: string; // How would you describe it? (sharp, dull, throbbing)
@@ -51,9 +45,7 @@ export interface AdditionalInsights {
   timing?: string; // Is it constant or does it come and go?
 }
 
-/**
- * Health issue or ongoing condition that groups multiple symptom entries
- */
+// Health issue or ongoing condition that groups multiple symptom entries
 export interface Issue {
   id: string;
   name: string; // e.g., "Chronic migraines", "Left knee pain"
@@ -64,9 +56,7 @@ export interface Issue {
   symptomIds: string[]; // References to SymptomEntry.id
 }
 
-/**
- * AI suggestion for issue relationship
- */
+// AI suggestion for issue relationship
 export interface SuggestedIssue {
   isRelated: boolean; // AI thinks this relates to an issue
   existingIssueId?: string; // ID of matched existing issue
@@ -74,9 +64,7 @@ export interface SuggestedIssue {
   confidence: number; // 0-1 confidence score
 }
 
-/**
- * Complete symptom entry with primary and additional insights
- */
+// Complete symptom entry with primary and additional insights
 export interface SymptomEntry {
   id: string;
   timestamp: Date;
@@ -86,9 +74,7 @@ export interface SymptomEntry {
   issueId?: string; // Optional reference to parent issue
 }
 
-/**
- * Issue selection made through conversation
- */
+// Issue selection made through conversation
 export interface IssueSelection {
   type: 'existing' | 'new' | 'none'; // What the user chose
   existingIssueId?: string; // ID if linking to existing issue
@@ -96,9 +82,7 @@ export interface IssueSelection {
   newIssueStartDate?: string; // Start date if creating new issue (ISO YYYY-MM-DD)
 }
 
-/**
- * Response from Claude API extraction
- */
+// Response from Claude API extraction
 export interface ExtractionResponse {
   metadata: SymptomMetadata;
   aiMessage?: string; // AI's conversational response to the user
@@ -108,12 +92,67 @@ export interface ExtractionResponse {
   issueSelection?: IssueSelection; // User's issue selection made through conversation
 }
 
-/**
- * Validation result
- */
+// Validation result
 export interface ValidationResult {
   success: boolean;
   data?: SymptomMetadata;
   error?: string;
   message?: string;
 }
+
+// ============================================================================
+// TOOL USE API TYPES
+// ============================================================================
+
+// Tool definition for Claude's tool_use API
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  input_schema: {
+    type: 'object';
+    properties: Record<string, {
+      type: string;
+      description?: string;
+      enum?: string[];
+      items?: { type: string };
+    }>;
+    required: string[];
+  };
+}
+
+// Query types for symptom history tool
+export type SymptomHistoryQueryType = 'recent' | 'by_location' | 'by_issue' | 'by_date_range';
+
+// Input parameters for get_symptom_history tool
+export interface SymptomHistoryToolInput {
+  query_type: SymptomHistoryQueryType;
+  location?: string;
+  issue_id?: string;
+  days_back?: number;
+  limit?: number;
+}
+
+// Text block in Claude API messages
+export interface TextBlock {
+  type: 'text';
+  text: string;
+}
+
+// Tool use request from Claude
+export interface ToolUseBlock {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: SymptomHistoryToolInput;
+}
+
+// Tool result to send back to Claude
+export interface ToolResultBlock {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string;
+}
+
+// Extended message content types for tool_use API
+export type MessageContent = TextBlock | ToolUseBlock;
+export type UserMessageContent = TextBlock | ToolResultBlock;

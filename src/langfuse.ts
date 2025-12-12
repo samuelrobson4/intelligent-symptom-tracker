@@ -1,6 +1,5 @@
-/**
- * Langfuse integration for observability, prompt tracking, and evaluation
- */
+// Langfuse integration for observability, prompt tracking, and evaluation
+
 
 import { Langfuse } from 'langfuse';
 
@@ -33,9 +32,8 @@ if (langfusePublicKey && langfuseSecretKey) {
   console.warn('Langfuse API keys not found. Tracing disabled.');
 }
 
-/**
- * Calculate cost for Claude API call
- */
+// Calculate cost for Claude API call
+
 function calculateCost(
   model: string,
   inputTokens: number,
@@ -53,9 +51,8 @@ function calculateCost(
   return inputCost + outputCost;
 }
 
-/**
- * Create a new trace for a conversation session
- */
+// Create a new trace for a conversation session
+
 export function createTrace(params: {
   sessionId?: string;
   userId?: string;
@@ -70,9 +67,8 @@ export function createTrace(params: {
   });
 }
 
-/**
- * Log a Claude API generation within a trace
- */
+// Log a Claude API generation within a trace
+
 export function logGeneration(params: {
   trace: ReturnType<typeof createTrace>;
   name: string;
@@ -112,9 +108,8 @@ export function logGeneration(params: {
   });
 }
 
-/**
- * Log a validation failure or retry attempt
- */
+// Log a validation failure or retry attempt
+
 export function logEvent(params: {
   trace: ReturnType<typeof createTrace>;
   name: string;
@@ -130,9 +125,8 @@ export function logEvent(params: {
   });
 }
 
-/**
- * Update trace metadata (e.g., final symptom data)
- */
+// Update trace metadata (e.g., final symptom data)
+
 export function updateTrace(params: {
   trace: ReturnType<typeof createTrace>;
   output?: any;
@@ -148,18 +142,16 @@ export function updateTrace(params: {
   });
 }
 
-/**
- * Flush all pending Langfuse events (call before app closes)
- */
+// Flush all pending Langfuse events (call before app closes)
+
 export async function flushLangfuse() {
   if (langfuseClient) {
     await langfuseClient.flushAsync();
   }
 }
 
-/**
- * Check if Langfuse is enabled
- */
+// Check if Langfuse is enabled
+
 export function isLangfuseEnabled(): boolean {
   return langfuseClient !== null;
 }

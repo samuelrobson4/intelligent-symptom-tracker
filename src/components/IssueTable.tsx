@@ -1,6 +1,5 @@
-/**
- * Paginated and filterable recurring issue record table
- */
+// Paginated and filterable recurring issue record table
+
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';

@@ -1,6 +1,5 @@
-/**
- * Issue selector component for associating symptoms with health issues
- */
+// Issue selector component for associating symptoms with health issues
+
 
 import { useState } from 'react';
 import { SuggestedIssue } from '@/types';
