@@ -21,7 +21,7 @@ import {
 import { Pagination } from './Pagination';
 import { SymptomDetailsDialog } from './SymptomDetailsDialog';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
-import { Eye, Trash2, Search, X } from 'lucide-react';
+import { Eye, Pencil, Search, X } from 'lucide-react';
 
 interface SymptomTableProps {
   refreshTrigger?: number;
@@ -95,15 +95,15 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
   const totalPages = Math.ceil(total / (filters.limit || 10));
 
   return (
-    <div className="space-y-2">
+    <div className="border border-gray-200 rounded-lg p-4 flex flex-col gap-2 h-full overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-900">Symptom Log</h2>
+        <h2 className="text-xs font-semibold text-gray-900">Symptom Log</h2>
         <Button
           variant="outline"
           size="sm"
           onClick={() => setShowFilters(!showFilters)}
-          className="text-sm text-gray-600 border-gray-300 h-7 px-3"
+          className="text-xs text-gray-600 border-gray-300 h-7 px-3"
         >
           Filter
         </Button>
@@ -112,37 +112,37 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
       {/* Filter Panel */}
       {showFilters && (
         <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Search */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Search</label>
+              <label className="text-xs font-medium">Search</label>
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search description..."
                   value={filters.searchQuery || ''}
                   onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
-                  className="pl-8"
+                  className="pl-8 text-xs placeholder:text-xs h-9"
                 />
               </div>
             </div>
 
             {/* Location */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Location</label>
+              <label className="text-xs font-medium">Location</label>
               <Select
                 value={filters.location || 'all'}
                 onValueChange={(value) =>
                   handleFilterChange('location', value === 'all' ? undefined : value)
                 }
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="All locations" />
+                <SelectTrigger className="text-xs h-9">
+                  <SelectValue placeholder="All locations" className="text-xs" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All locations</SelectItem>
+                  <SelectItem value="all" className="text-xs">All locations</SelectItem>
                   {Object.values(Location).map((loc) => (
-                    <SelectItem key={loc} value={loc}>
+                    <SelectItem key={loc} value={loc} className="text-xs">
                       {loc.replace(/_/g, ' ')}
                     </SelectItem>
                   ))}
@@ -150,94 +150,20 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
               </Select>
             </div>
 
-            {/* Issue */}
+            {/* Start Date */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Issue</label>
-              <Select
-                value={
-                  filters.issueId === null
-                    ? 'none'
-                    : filters.issueId || 'all'
-                }
-                onValueChange={(value) =>
-                  handleFilterChange(
-                    'issueId',
-                    value === 'all' ? undefined : value === 'none' ? null : value
-                  )
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All issues" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All issues</SelectItem>
-                  <SelectItem value="none">No issue</SelectItem>
-                  {issues.map((issue) => (
-                    <SelectItem key={issue.id} value={issue.id}>
-                      {issue.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Severity Range */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Min Severity</label>
-              <Input
-                type="number"
-                min="0"
-                max="10"
-                placeholder="0"
-                value={filters.severityMin || ''}
-                onChange={(e) =>
-                  handleFilterChange(
-                    'severityMin',
-                    e.target.value ? parseInt(e.target.value) : undefined
-                  )
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Max Severity</label>
-              <Input
-                type="number"
-                min="0"
-                max="10"
-                placeholder="10"
-                value={filters.severityMax || ''}
-                onChange={(e) =>
-                  handleFilterChange(
-                    'severityMax',
-                    e.target.value ? parseInt(e.target.value) : undefined
-                  )
-                }
-              />
-            </div>
-
-            {/* Date Range */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Start Date</label>
+              <label className="text-xs font-medium">Start Date</label>
               <Input
                 type="date"
                 value={filters.startDate || ''}
                 onChange={(e) => handleFilterChange('startDate', e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">End Date</label>
-              <Input
-                type="date"
-                value={filters.endDate || ''}
-                onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                className="text-xs placeholder:text-xs h-9"
               />
             </div>
           </div>
 
           <div className="flex justify-end">
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="text-xs h-8">
               <X className="h-4 w-4 mr-2" />
               Clear Filters
             </Button>
@@ -246,16 +172,16 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
       )}
 
       {/* Table - Minimal design with responsive layout */}
-      <div className="bg-white overflow-x-auto">
+      <div className="bg-white overflow-auto flex-1">
         {/* Desktop Table View - Hidden on mobile */}
         <div className="hidden md:block">
           {/* Column Headers */}
           <div className="grid grid-cols-6 gap-3 px-3 py-2 border-b border-gray-200">
-            <div className="text-sm font-medium text-gray-500">Date</div>
-            <div className="text-sm font-medium text-gray-500">Location</div>
-            <div className="text-sm font-medium text-gray-500">Severity</div>
-            <div className="text-sm font-medium text-gray-500 col-span-2">Description</div>
-            <div className="text-sm font-medium text-gray-500 text-right">Actions</div>
+            <div className="text-xs font-medium text-gray-500">Date</div>
+            <div className="text-xs font-medium text-gray-500">Location</div>
+            <div className="text-xs font-medium text-gray-500">Severity</div>
+            <div className="text-xs font-medium text-gray-500 col-span-2">Description</div>
+            <div></div>
           </div>
 
           {/* Data Rows */}
@@ -264,16 +190,16 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
               symptoms.map((symptom) => {
                 return (
                   <div key={symptom.id} className="grid grid-cols-6 gap-3 px-3 py-2 hover:bg-gray-50">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-xs text-gray-900">
                       {formatDate(symptom.timestamp)}
                     </div>
-                    <div className="text-sm text-gray-900 capitalize">
+                    <div className="text-xs text-gray-900 capitalize">
                       {symptom.metadata.location.replace(/_/g, ' ')}
                     </div>
-                    <div className="text-sm text-gray-900">
+                    <div className="text-xs text-gray-900">
                       {symptom.metadata.severity}/10
                     </div>
-                    <div className="text-sm text-gray-900 col-span-2 truncate">
+                    <div className="text-xs text-gray-900 col-span-2 truncate">
                       {symptom.metadata.description || '-'}
                     </div>
                     <div className="text-right">
@@ -287,15 +213,7 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
                           }}
                           className="h-6 w-6 p-0"
                         >
-                          <Eye className="h-3 w-3 text-gray-500" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSymptomToDelete(symptom)}
-                          className="h-6 w-6 p-0"
-                        >
-                          <Trash2 className="h-3 w-3 text-gray-500" />
+                          <Pencil className="h-3 w-3 text-gray-500" />
                         </Button>
                       </div>
                     </div>
@@ -303,7 +221,7 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
                 );
               })
             ) : (
-              <div className="px-3 py-6 text-center text-gray-500 text-sm">
+              <div className="px-3 py-6 text-center text-gray-500 text-xs">
                 No symptoms found
               </div>
             )}
@@ -321,7 +239,7 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
                       <div className="text-xs text-gray-500">
                         {formatDate(symptom.timestamp)}
                       </div>
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-xs font-medium text-gray-900">
                         {symptom.metadata.description || '-'}
                       </div>
                       <div className="flex gap-3 text-xs text-gray-600">
@@ -341,15 +259,7 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
                         }}
                         className="h-7 w-7 p-0"
                       >
-                        <Eye className="h-3.5 w-3.5 text-gray-500" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSymptomToDelete(symptom)}
-                        className="h-7 w-7 p-0"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-gray-500" />
+                        <Pencil className="h-3.5 w-3.5 text-gray-500" />
                       </Button>
                     </div>
                   </div>
@@ -357,7 +267,7 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
               );
             })
           ) : (
-            <div className="px-3 py-6 text-center text-gray-500 text-sm">
+            <div className="px-3 py-6 text-center text-gray-500 text-xs">
               No symptoms found
             </div>
           )}
@@ -385,6 +295,7 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
           setShowDetailsDialog(false);
           setSelectedSymptom(null);
         }}
+        onUpdate={loadSymptoms}
       />
 
       <DeleteConfirmDialog

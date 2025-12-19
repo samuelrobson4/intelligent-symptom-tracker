@@ -1,16 +1,18 @@
 // Chat-based interface for conversational symptom logging
 // Upgraded with shadcn/ui components
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { processChatMessage, ConversationMessage } from '@/claudeService';
-import { SymptomMetadata, AdditionalInsights, SuggestedIssue, SymptomEntry, Issue, IssueSelection } from '@/types';
+import { SymptomMetadata, AdditionalInsights, SuggestedIssue, SymptomEntry, Issue, IssueSelection, ChatMessage } from '@/types';
 import { Message } from '@/components/Message';
 import { ChatInput } from '@/components/ChatInput';
+import { SymptomCard } from '@/components/SymptomCard';
 import {
   getEnrichedIssues,
   EnrichedIssue,
   saveIssue,
   saveSymptom,
+  getSymptom,
   linkSymptomToIssue,
   generateUUID,
   saveDraft,
@@ -31,11 +33,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
-
-interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
 
 interface ChatInterfaceProps {
   onDataChange?: () => void;
@@ -65,6 +62,9 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
   // Success message state
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Greeting message state
+  const [greetingShown, setGreetingShown] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load active issues on mount
@@ -83,6 +83,19 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
       clearDraft();
     }
   }, []);
+
+  // Show greeting message on initial load
+  useEffect(() => {
+    if (messages.length === 0 && !greetingShown) {
+      const greetingMessage: ChatMessage = {
+        role: 'assistant',
+        content: 'Hi, what can I help you with today?',
+        type: 'message'
+      };
+      setMessages([greetingMessage]);
+      setGreetingShown(true);
+    }
+  }, []); // Empty dependency - only on mount
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -130,8 +143,13 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
 
     try {
       // Process the message with conversation context and active issues
+      // Filter to only user/assistant messages for conversation history
+      const conversationHistory = newMessages
+        .slice(0, -1)
+        .filter(msg => msg.role === 'user' || msg.role === 'assistant') as ConversationMessage[];
+
       const result = await processChatMessage(
-        newMessages.slice(0, -1) as ConversationMessage[],
+        conversationHistory,
         userMessage,
         issues // Pass active issues for AI to suggest matches
       );
@@ -183,6 +201,8 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
     setIssueSelection(null);
     // Clear success message
     setSuccessMessage(null);
+    // Reset greeting flag so it shows again
+    setGreetingShown(false);
     // Clear draft
     clearDraft();
   };
@@ -210,6 +230,43 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
     setShowResumeDialog(false);
     setPendingDraft(null);
   };
+
+  // Handle symptom card updates
+  const handleSymptomUpdate = useCallback((symptomId: string, updates: Partial<SymptomEntry>) => {
+    // Get current symptom from localStorage
+    const currentSymptom = getSymptom(symptomId);
+    if (!currentSymptom) return;
+
+    // Merge updates
+    const updatedSymptom = {
+      ...currentSymptom,
+      ...updates,
+      metadata: { ...currentSymptom.metadata, ...updates.metadata },
+      additionalInsights: { ...currentSymptom.additionalInsights, ...updates.additionalInsights }
+    };
+
+    // Save to localStorage
+    saveSymptom(updatedSymptom);
+
+    // Trigger table refresh
+    onDataChange?.();
+
+    // Update message state to reflect changes
+    setMessages(prevMessages =>
+      prevMessages.map(msg =>
+        msg.symptomId === symptomId && msg.symptomData
+          ? {
+              ...msg,
+              symptomData: {
+                ...msg.symptomData,
+                metadata: updatedSymptom.metadata,
+                additionalInsights: updatedSymptom.additionalInsights
+              }
+            }
+          : msg
+      )
+    );
+  }, [onDataChange]);
 
   // Auto-save when conversation is complete
   useEffect(() => {
@@ -328,7 +385,12 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
               setLoading(true);
 
               // Process the queued symptom with conversation history
-              processChatMessage(messages, nextSymptom, issues)
+              // Filter to only user/assistant messages
+              const conversationHistory = messages.filter(
+                msg => msg.role === 'user' || msg.role === 'assistant'
+              ) as ConversationMessage[];
+
+              processChatMessage(conversationHistory, nextSymptom, issues)
                 .then((result) => {
                   setExtractedMetadata(result.extractedData.metadata);
                   setAdditionalInsights(result.additionalInsights);
@@ -368,10 +430,37 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
             }
           }, 500);
         } else {
-          // No queued symptoms, full reset
+          // No queued symptoms, show card and continue conversation
           setSuccessMessage(`Symptom logged successfully${issueMessage}!`);
+
+          // Insert symptom card into messages
+          const symptomCardMessage: ChatMessage = {
+            role: 'system',
+            content: '',
+            type: 'symptom-card',
+            symptomId: symptomId,
+            symptomData: {
+              metadata: extractedMetadata,
+              additionalInsights,
+              issueId: finalIssueId,
+              issueName: issueSelection?.type === 'new'
+                ? issueSelection.newIssueName
+                : issues.find(i => i.id === finalIssueId)?.name
+            }
+          };
+
+          setMessages(prevMessages => [...prevMessages, symptomCardMessage]);
+
+          // Clear only metadata states, keep messages visible
+          setExtractedMetadata(null);
+          setAdditionalInsights({});
+          setConversationComplete(false);
+          setSuggestedIssue(null);
+          setIssueSelection(null);
+
+          // Clear success message after 2s
           setTimeout(() => {
-            handleReset();
+            setSuccessMessage(null);
           }, 2000);
         }
       } catch (err) {
@@ -397,19 +486,51 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
           S
           <div className="absolute top-0 right-0 w-2 h-2 sm:w-2.5 sm:h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
         </div>
-        <div>
+        <div className="flex-1">
           <div className="text-xs font-semibold text-gray-900">Symptom Agent</div>
           <div className="text-[10px] text-gray-500">Active</div>
         </div>
+        {messages.length > 1 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleReset}
+            className="text-xs"
+          >
+            Clear Chat
+          </Button>
+        )}
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col">
 
         {/* Messages area with responsive padding */}
         <ScrollArea className="flex-1 px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6">
-          {messages.map((message, index) => (
-            <Message key={index} role={message.role} content={message.content} />
-          ))}
+          {messages.map((message, index) => {
+            // Render symptom card
+            if (message.type === 'symptom-card' && message.symptomData && message.symptomId) {
+              return (
+                <SymptomCard
+                  key={`${message.symptomId}-${index}`}
+                  symptomId={message.symptomId}
+                  metadata={message.symptomData.metadata}
+                  additionalInsights={message.symptomData.additionalInsights}
+                  issueId={message.symptomData.issueId}
+                  issueName={message.symptomData.issueName}
+                  onUpdate={handleSymptomUpdate}
+                />
+              );
+            }
+
+            // Render normal message
+            return (
+              <Message
+                key={index}
+                role={message.role as 'user' | 'assistant'}
+                content={message.content}
+              />
+            );
+          })}
 
           {loading && (
             <div className="flex justify-start mb-3">
@@ -445,8 +566,8 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
           </div>
         )}
 
-        {/* Quick Prompts - only show when no messages */}
-        {messages.length === 0 && (
+        {/* Quick Prompts - only show when chat is empty or only has greeting */}
+        {messages.length <= 1 && (
           <div className="px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 md:pb-6">
             <div className="flex flex-wrap gap-1.5 sm:gap-2">
               {quickPrompts.map((prompt) => (
@@ -477,22 +598,22 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
       <Dialog open={showResumeDialog} onOpenChange={setShowResumeDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Resume Previous Conversation?</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-xs font-semibold">Resume Previous Conversation?</DialogTitle>
+            <DialogDescription className="text-xs">
               You have an unfinished symptom entry from earlier. Would you like to continue where you left off?
             </DialogDescription>
           </DialogHeader>
 
           {pendingDraft && (
             <div className="py-4">
-              <p className="text-sm text-muted-foreground mb-2">
+              <p className="text-xs text-gray-500 mb-2">
                 Draft saved: {new Date(pendingDraft.timestamp).toLocaleString()}
               </p>
-              <p className="text-sm">
+              <p className="text-xs text-gray-900">
                 <strong>Messages:</strong> {pendingDraft.messages.length}
               </p>
               {pendingDraft.extractedMetadata?.location && (
-                <p className="text-sm">
+                <p className="text-xs text-gray-900">
                   <strong>Location:</strong> {pendingDraft.extractedMetadata.location}
                 </p>
               )}
@@ -500,10 +621,14 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
           )}
 
           <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={handleStartFresh}>
+            <Button variant="outline" onClick={handleStartFresh} className="text-xs h-9">
               Start Fresh
             </Button>
-            <Button onClick={handleResumeDraft}>
+            <Button
+              onClick={handleResumeDraft}
+              className="text-xs h-9"
+              style={{ backgroundColor: '#62B8FF' }}
+            >
               Resume Draft
             </Button>
           </DialogFooter>

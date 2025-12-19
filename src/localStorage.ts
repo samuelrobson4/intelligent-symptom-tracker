@@ -1,6 +1,6 @@
 // LocalStorage persistence layer for symptoms and issues
 
-import { SymptomEntry, Issue, SymptomMetadata, AdditionalInsights, SuggestedIssue, IssueSelection } from './types';
+import { SymptomEntry, Issue, SymptomMetadata, AdditionalInsights, SuggestedIssue, IssueSelection, ChatMessage } from './types';
 import { generateUUID } from './utils/uuid';
 import { isValidDateRange } from './utils/dateHelpers';
 
@@ -406,7 +406,7 @@ export function clearAllData(): void {
 
 // Draft conversation state for autosave/resume
 export interface ConversationDraft {
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  messages: ChatMessage[];
   extractedMetadata: SymptomMetadata | null;
   additionalInsights: AdditionalInsights;
   queuedSymptoms: string[];

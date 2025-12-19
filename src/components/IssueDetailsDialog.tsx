@@ -5,10 +5,6 @@ import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,7 +18,8 @@ import {
   deleteIssue,
 } from '@/localStorage';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
-import { Calendar, Activity, TrendingUp, CheckCircle, Trash2 } from 'lucide-react';
+import { CheckCircle, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface IssueDetailsDialogProps {
   issue: EnrichedIssue | null;
@@ -83,157 +80,160 @@ export function IssueDetailsDialog({
 
   // Severity color coding
   const getSeverityColor = (severity: number) => {
-    if (severity >= 7) return 'text-red-500';
-    if (severity >= 4) return 'text-yellow-500';
-    return 'text-green-500';
+    if (severity >= 7) return 'bg-red-500';
+    if (severity >= 4) return 'bg-yellow-500';
+    return 'bg-green-500';
   };
 
   return (
     <>
       <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <DialogTitle>{issue.name}</DialogTitle>
-                <Badge variant={issue.status === 'active' ? 'default' : 'secondary'}>
+          <div className="space-y-3">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-semibold text-gray-900">{issue.name}</h4>
+                <Badge
+                  variant="success"
+                  className="text-xs capitalize"
+                >
                   {issue.status}
                 </Badge>
               </div>
             </div>
-            <DialogDescription>
-              Started on {formatDate(issue.startDate)}
-              {issue.endDate && ` • Resolved on ${formatDate(issue.endDate)}`}
-            </DialogDescription>
-          </DialogHeader>
 
-          <div className="space-y-6 py-4">
-            {/* Statistics */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-muted/50 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-xs font-medium text-muted-foreground">Total Entries</p>
+            {/* Start/End date info and Statistics */}
+            <div className="space-y-1 p-2">
+              <p className="text-xs text-gray-500">
+                Started on {formatDate(issue.startDate)}
+                {issue.endDate && ` • Resolved on ${formatDate(issue.endDate)}`}
+              </p>
+              <p className="text-xs text-gray-900">
+                • <span className="text-gray-500">Total Entries:</span> {stats.totalEntries}
+              </p>
+              <div className="flex items-center gap-1 text-xs text-gray-900">
+                <span>•</span>
+                <span className="text-gray-500">Avg Severity:</span>
+                <div className="flex items-center gap-1">
+                  <div
+                    className={cn(
+                      'h-2 w-2 rounded-full',
+                      getSeverityColor(stats.avgSeverity)
+                    )}
+                  />
+                  <span>{stats.avgSeverity}/10</span>
                 </div>
-                <p className="text-2xl font-bold">{stats.totalEntries}</p>
               </div>
-
-              <div className="bg-muted/50 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-xs font-medium text-muted-foreground">Avg Severity</p>
-                </div>
-                <p className={`text-2xl font-bold ${getSeverityColor(stats.avgSeverity)}`}>
-                  {stats.avgSeverity}/10
-                </p>
-              </div>
-
-              <div className="bg-muted/50 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-xs font-medium text-muted-foreground">Last Entry</p>
-                </div>
-                <p className="text-sm font-semibold">
-                  {stats.lastEntry ? formatDate(stats.lastEntry) : 'N/A'}
-                </p>
-              </div>
+              <p className="text-xs text-gray-900">
+                • <span className="text-gray-500">Last Entry:</span> {stats.lastEntry ? formatDate(stats.lastEntry) : 'N/A'}
+              </p>
             </div>
 
-            {/* Linked Symptoms */}
-            <div className="border-t pt-4">
-              <h4 className="text-sm font-semibold mb-3">
+            {/* Linked Symptoms - expandable */}
+            <details className="border-t border-gray-200 pt-2">
+              <summary className="text-xs text-gray-600 cursor-pointer hover:text-gray-900 font-medium">
                 Linked Symptoms ({symptoms.length})
-              </h4>
-              {symptoms.length > 0 ? (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {symptoms
+              </summary>
+              <div className="mt-2 space-y-2">
+                {symptoms.length > 0 ? (
+                  symptoms
                     .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
                     .map((symptom) => (
                       <div
                         key={symptom.id}
-                        className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                        className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"
                       >
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-medium">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-xs font-medium text-gray-900">
                               {formatDate(symptom.timestamp)}
                             </span>
-                            <Badge className={`${getSeverityColor(symptom.metadata.severity) === 'text-red-500' ? 'bg-red-500' : getSeverityColor(symptom.metadata.severity) === 'text-yellow-500' ? 'bg-yellow-500' : 'bg-green-500'} text-white`}>
-                              {symptom.metadata.severity}/10
-                            </Badge>
+                            <div className="flex items-center gap-1">
+                              <div
+                                className={cn(
+                                  'h-2 w-2 rounded-full',
+                                  getSeverityColor(symptom.metadata.severity)
+                                )}
+                              />
+                              <span className="text-xs text-gray-900">
+                                {symptom.metadata.severity}/10
+                              </span>
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground capitalize">
+                          <p className="text-xs text-gray-500 capitalize">
                             {symptom.metadata.location.replace(/_/g, ' ')}
                           </p>
                         </div>
                       </div>
-                    ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No symptoms linked to this issue yet.</p>
-              )}
-            </div>
-
-            {/* Resolve Form */}
-            {issue.status === 'active' && (
-              <div className="border-t pt-4">
-                {showResolveForm ? (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="endDate">Resolution Date</Label>
-                      <Input
-                        id="endDate"
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        max={new Date().toISOString().split('T')[0]}
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button onClick={handleResolve} className="flex-1">
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Confirm Resolution
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setShowResolveForm(false);
-                          setEndDate('');
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
+                    ))
                 ) : (
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setShowResolveForm(true);
-                      setEndDate(new Date().toISOString().split('T')[0]);
-                    }}
-                    className="w-full"
-                  >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Mark as Resolved
-                  </Button>
+                  <p className="text-xs text-gray-500 p-2">No symptoms linked to this issue yet.</p>
                 )}
               </div>
-            )}
-          </div>
+            </details>
 
-          <DialogFooter className="gap-2">
-            <Button
-              variant="destructive"
-              onClick={() => setShowDeleteConfirm(true)}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Issue
-            </Button>
-            <Button variant="outline" onClick={onClose}>
-              Close
-            </Button>
-          </DialogFooter>
+            {/* Resolve Form */}
+            {issue.status === 'active' && showResolveForm && (
+              <div className="border-t border-gray-200 pt-3 space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="endDate" className="text-xs">Resolution Date</Label>
+                  <Input
+                    id="endDate"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="text-xs placeholder:text-xs h-9"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleResolve} className="flex-1 text-xs h-9">
+                    <CheckCircle className="h-3.5 w-3.5 mr-2" />
+                    Confirm Resolution
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowResolveForm(false);
+                      setEndDate('');
+                    }}
+                    className="text-xs h-9"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-2 border-t border-gray-200">
+              {issue.status === 'active' && !showResolveForm && (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowResolveForm(true);
+                    setEndDate(new Date().toISOString().split('T')[0]);
+                  }}
+                  className="text-xs h-9"
+                >
+                  <CheckCircle className="h-3.5 w-3.5 mr-2" />
+                  Mark as Resolved
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-xs h-9 text-red-600 border-red-600 hover:bg-red-50"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                Delete Issue
+              </Button>
+              <Button variant="outline" onClick={onClose} className="text-xs h-9">
+                Close
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

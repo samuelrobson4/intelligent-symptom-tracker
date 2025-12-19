@@ -132,6 +132,20 @@ export interface SymptomHistoryToolInput {
   limit?: number;
 }
 
+// Extended ChatMessage interface for UI rendering
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  type?: 'message' | 'symptom-card'; // Type discriminator
+  symptomId?: string; // For symptom-card type
+  symptomData?: { // Store symptom data in message
+    metadata: SymptomMetadata;
+    additionalInsights: AdditionalInsights;
+    issueId?: string;
+    issueName?: string;
+  };
+}
+
 // Text block in Claude API messages
 export interface TextBlock {
   type: 'text';

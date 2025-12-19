@@ -20,7 +20,7 @@ export function Message({ role, content }: MessageProps) {
           ? "bg-blue-400 text-white"
           : "bg-gray-100 text-gray-900"
       )}>
-        <p className="text-sm whitespace-pre-wrap leading-relaxed">{content}</p>
+        <p className="text-xs whitespace-pre-wrap leading-relaxed">{content}</p>
       </div>
     </div>
   );

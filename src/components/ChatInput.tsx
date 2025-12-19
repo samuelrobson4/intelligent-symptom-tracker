@@ -51,13 +51,13 @@ export function ChatInput({
         placeholder="Enter your message"
         disabled={disabled}
         autoFocus={autoFocus}
-        className="flex-1 text-sm border-gray-300 focus:border-blue-400 focus:ring-blue-400 h-9"
+        className="flex-1 text-xs placeholder:text-xs border-gray-300 focus:border-blue-400 focus:ring-blue-400 h-8"
       />
       <Button
         type="submit"
         disabled={disabled || !value.trim()}
         size="icon"
-        className="bg-blue-400 hover:bg-blue-500 h-9 w-9"
+        className="bg-blue-400 hover:bg-blue-500 h-8 w-8"
       >
         <SendHorizontal className="h-3.5 w-3.5" />
       </Button>
