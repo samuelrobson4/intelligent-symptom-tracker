@@ -14,7 +14,6 @@ import {
 import { SymptomEntry, Location } from '@/types';
 import {
   getFilteredSymptoms,
-  getIssues,
   deleteSymptom,
   SymptomFilterOptions,
 } from '@/localStorage';
