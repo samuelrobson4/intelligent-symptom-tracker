@@ -21,7 +21,7 @@ import {
 import { Pagination } from './Pagination';
 import { SymptomDetailsDialog } from './SymptomDetailsDialog';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
-import { Eye, Pencil, Search, X } from 'lucide-react';
+import { Pencil, Search, X } from 'lucide-react';
 
 interface SymptomTableProps {
   refreshTrigger?: number;
@@ -41,8 +41,6 @@ export function SymptomTable({ refreshTrigger = 0 }: SymptomTableProps) {
   const [selectedSymptom, setSelectedSymptom] = useState<SymptomEntry | null>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   const [symptomToDelete, setSymptomToDelete] = useState<SymptomEntry | null>(null);
-
-  const issues = getIssues();
 
   // Load symptoms when filters or refresh trigger change
   useEffect(() => {

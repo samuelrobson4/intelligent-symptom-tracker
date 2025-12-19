@@ -14,7 +14,7 @@ import {
 import { EnrichedIssue, getEnrichedIssues, getIssueStats } from '@/localStorage';
 import { Pagination } from './Pagination';
 import { IssueDetailsDialog } from './IssueDetailsDialog';
-import { Eye, Pencil, Search, X } from 'lucide-react';
+import { Pencil, Search, X } from 'lucide-react';
 import { Badge } from './ui/badge';
 
 interface IssueTableProps {
