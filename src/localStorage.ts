@@ -250,28 +250,37 @@ export interface EnrichedIssue extends Issue {
 
 // Get issues enriched with recent symptom data
 export function getEnrichedIssues(status?: 'active' | 'resolved'): EnrichedIssue[] {
-  const issues = getIssues(status);
+  // PERFORMANCE FIX: Load data once instead of calling getData() for each issue
+  const data = getData();
   const today = new Date();
 
-  return issues.map((issue) => {
-    const recentSymptom = getMostRecentSymptomForIssue(issue.id);
+  // Filter issues by status
+  let issues = data.issues;
+  if (status) {
+    issues = issues.filter(i => i.status === status);
+  }
 
-    if (!recentSymptom) {
+  return issues.map((issue) => {
+    // Find most recent symptom for this issue from already-loaded symptoms
+    const issueSymptoms = data.symptoms.filter(s => s.issueId === issue.id);
+
+    if (issueSymptoms.length === 0) {
       return issue; // No symptoms yet
     }
 
-    const symptomDate = typeof recentSymptom.timestamp === 'string'
-      ? new Date(recentSymptom.timestamp)
-      : recentSymptom.timestamp;
+    // Sort by timestamp descending and get first
+    const recentSymptom = issueSymptoms.sort(
+      (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+    )[0];
 
     const daysAgo = Math.floor(
-      (today.getTime() - symptomDate.getTime()) / (1000 * 60 * 60 * 24)
+      (today.getTime() - recentSymptom.timestamp.getTime()) / (1000 * 60 * 60 * 24)
     );
 
     return {
       ...issue,
       lastEntry: {
-        date: symptomDate.toISOString().split('T')[0],
+        date: recentSymptom.timestamp.toISOString().split('T')[0],
         daysAgo,
         severity: recentSymptom.metadata.severity,
       },
@@ -461,4 +470,105 @@ export function isDraftExpired(draft: ConversationDraft): boolean {
   const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
   return draftAge > twentyFourHours;
+}
+
+// ============================================================================
+// SYMPTOM TODO LIST
+// ============================================================================
+
+const TODOS_KEY = 'symptom_logger_todos';
+
+export interface SymptomTodo {
+  id: string; // UUID for each todo
+  symptom: string; // User's description ("stomach pain", "headache")
+  addedAt: Date; // When it was added
+  sourceConversationTimestamp?: Date; // When user mentioned it (for context)
+}
+
+// Get all pending symptom todos
+export function getSymptomTodos(): SymptomTodo[] {
+  try {
+    const data = localStorage.getItem(TODOS_KEY);
+    if (!data) {
+      return [];
+    }
+
+    const parsed = JSON.parse(data);
+
+    // Convert date strings back to Date objects
+    return parsed.map((todo: SymptomTodo) => ({
+      ...todo,
+      addedAt: new Date(todo.addedAt),
+      sourceConversationTimestamp: todo.sourceConversationTimestamp
+        ? new Date(todo.sourceConversationTimestamp)
+        : undefined,
+    }));
+  } catch (error) {
+    console.error('Error reading symptom todos from localStorage:', error);
+    return [];
+  }
+}
+
+// Save symptom todos to localStorage
+function setSymptomTodos(todos: SymptomTodo[]): void {
+  try {
+    localStorage.setItem(TODOS_KEY, JSON.stringify(todos));
+  } catch (error) {
+    console.error('Error writing symptom todos to localStorage:', error);
+  }
+}
+
+// Add new symptom todo(s)
+export function addSymptomTodos(symptoms: string[]): SymptomTodo[] {
+  const todos = getSymptomTodos();
+  const newTodos: SymptomTodo[] = [];
+
+  for (const symptom of symptoms) {
+    // Check for duplicates (case-insensitive)
+    const isDuplicate = todos.some(
+      t => t.symptom.toLowerCase().trim() === symptom.toLowerCase().trim()
+    );
+
+    if (!isDuplicate) {
+      const newTodo: SymptomTodo = {
+        id: generateUUID(),
+        symptom: symptom.trim(),
+        addedAt: new Date(),
+        sourceConversationTimestamp: new Date(),
+      };
+      todos.push(newTodo);
+      newTodos.push(newTodo);
+    }
+  }
+
+  setSymptomTodos(todos);
+  return newTodos;
+}
+
+// Mark a symptom todo as complete and remove it
+export function completeSymptomTodo(todoId: string): boolean {
+  const todos = getSymptomTodos();
+  const filteredTodos = todos.filter(t => t.id !== todoId);
+
+  if (filteredTodos.length === todos.length) {
+    // Todo not found
+    return false;
+  }
+
+  setSymptomTodos(filteredTodos);
+  return true;
+}
+
+// Remove a symptom todo (user declined to log it)
+export function removeSymptomTodo(todoId: string): boolean {
+  return completeSymptomTodo(todoId); // Same implementation
+}
+
+// Clear all symptom todos
+export function clearSymptomTodos(): void {
+  try {
+    localStorage.removeItem(TODOS_KEY);
+  } catch (error) {
+    console.error('Error clearing symptom todos from localStorage:', error);
+  }
 }

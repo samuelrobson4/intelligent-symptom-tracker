@@ -2,8 +2,14 @@
 // Implements get_symptom_history tool with multiple query types
 
 import { SymptomEntry } from './types';
-import { getFilteredSymptoms } from './localStorage';
-import { SymptomHistoryToolInput } from './types';
+import {
+  getFilteredSymptoms,
+  getSymptomTodos,
+  addSymptomTodos,
+  completeSymptomTodo,
+  removeSymptomTodo,
+} from './localStorage';
+import { SymptomHistoryToolInput, SymptomTodoToolInput } from './types';
 
 // Format a symptom entry for display to Claude
 function formatSymptomForDisplay(symptom: SymptomEntry): string {
@@ -149,6 +155,91 @@ export async function executeGetSymptomHistory(
   }
 }
 
+// Execute the manage_symptom_todos tool
+// @param input - Tool input parameters from Claude
+// @returns Formatted string with operation result
+export async function executeManageSymptomTodos(
+  input: SymptomTodoToolInput
+): Promise<string> {
+  try {
+    const { operation, symptoms, todo_id } = input;
+
+    switch (operation) {
+      case 'add': {
+        if (!symptoms || symptoms.length === 0) {
+          return 'Error: "symptoms" parameter is required for add operation';
+        }
+
+        const addedTodos = addSymptomTodos(symptoms);
+
+        if (addedTodos.length === 0) {
+          return `All symptoms were already in the todo list (duplicates ignored): ${symptoms.join(', ')}`;
+        }
+
+        const todoList = addedTodos.map(t => `- ${t.symptom} (id: ${t.id})`).join('\n');
+        return `Added ${addedTodos.length} symptom(s) to track:\n${todoList}`;
+      }
+
+      case 'list': {
+        const todos = getSymptomTodos();
+
+        if (todos.length === 0) {
+          return 'No pending symptoms to log.';
+        }
+
+        const todoList = todos.map(t => `- ${t.symptom} (id: ${t.id})`).join('\n');
+        return `Pending symptoms to log (${todos.length}):\n${todoList}`;
+      }
+
+      case 'complete': {
+        if (!todo_id) {
+          return 'Error: "todo_id" parameter is required for complete operation';
+        }
+
+        const success = completeSymptomTodo(todo_id);
+
+        if (!success) {
+          return `Error: Todo with ID "${todo_id}" not found`;
+        }
+
+        const remaining = getSymptomTodos();
+        if (remaining.length > 0) {
+          const nextList = remaining.map(t => `- ${t.symptom} (id: ${t.id})`).join('\n');
+          return `Symptom todo marked complete. ${remaining.length} pending symptom(s) remain:\n${nextList}`;
+        } else {
+          return 'Symptom todo marked complete. No more pending symptoms.';
+        }
+      }
+
+      case 'remove': {
+        if (!todo_id) {
+          return 'Error: "todo_id" parameter is required for remove operation';
+        }
+
+        const success = removeSymptomTodo(todo_id);
+
+        if (!success) {
+          return `Error: Todo with ID "${todo_id}" not found`;
+        }
+
+        const remaining = getSymptomTodos();
+        if (remaining.length > 0) {
+          return `Symptom todo removed. ${remaining.length} pending symptom(s) remain.`;
+        } else {
+          return 'Symptom todo removed. No more pending symptoms.';
+        }
+      }
+
+      default:
+        return `Error: Invalid operation "${operation}". Must be one of: add, complete, list, remove`;
+    }
+
+  } catch (error) {
+    console.error('Error executing manage_symptom_todos tool:', error);
+    return `Error managing symptom todos: ${error instanceof Error ? error.message : 'Unknown error'}`;
+  }
+}
+
 // Route tool execution to the appropriate handler
 // @param toolName - Name of the tool to execute
 // @param toolInput - Input parameters for the tool
@@ -160,6 +251,9 @@ export async function executeToolCall(
   switch (toolName) {
     case 'get_symptom_history':
       return executeGetSymptomHistory(toolInput as SymptomHistoryToolInput);
+
+    case 'manage_symptom_todos':
+      return executeManageSymptomTodos(toolInput as SymptomTodoToolInput);
 
     default:
       return `Error: Unknown tool "${toolName}"`;

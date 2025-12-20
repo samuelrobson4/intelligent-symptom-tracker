@@ -22,7 +22,13 @@ if (!API_KEY || API_KEY === 'your_api_key_here') {
 const client = new Anthropic({
   apiKey: API_KEY,
   dangerouslyAllowBrowser: true, // Note: In production, use a backend proxy
+  timeout: 15000, // 15 second timeout to prevent indefinite hangs
 });
+
+// Helper function for exponential backoff delays
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // Process a conversational message and extract/update symptom metadata
 // This function maintains conversation context and gradually builds up the symptom data
@@ -36,11 +42,16 @@ export interface ConversationResult {
   additionalInsights: AdditionalInsights;
 }
 
+// Streaming callback type for progressive UI updates
+export type StreamCallback = (chunk: string) => void;
+
 export async function processChatMessage(
   conversationHistory: ConversationMessage[],
   userMessage: string,
   activeIssues: EnrichedIssue[] = [],
-  maxRetries: number = 3
+  maxRetries: number = 3,
+  onStream?: StreamCallback,
+  isMultiSymptomContinuation: boolean = false
 ): Promise<ConversationResult> {
   let lastError: string = '';
 
@@ -76,23 +87,66 @@ export async function processChatMessage(
     });
   }
 
+  // If this is a multi-symptom continuation, add format enforcement
+  if (isMultiSymptomContinuation && conversationHistory.length > 0) {
+    messages.push({
+      role: 'user',
+      content: `SYSTEM REMINDER: You must respond with valid JSON format as specified in your instructions, not plain conversational text. The user is confirming they want to log another symptom from the todo list.`
+    });
+  }
+
   // Add the new user message
   messages.push({
     role: 'user',
     content: userMessage,
   });
 
+  // Track total iterations including tool use to prevent unlimited loops
+  let totalIterations = 0;
+  const MAX_TOTAL_ITERATIONS = 5;
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
+    totalIterations++;
+
+    // Prevent unlimited tool use loops
+    if (totalIterations > MAX_TOTAL_ITERATIONS) {
+      throw new Error(`Maximum iterations (${MAX_TOTAL_ITERATIONS}) exceeded. Conversation may be too complex.`);
+    }
+
     const startTime = Date.now();
 
     try {
-      const response = await client.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 2048,
-        system: systemPrompt, // Use proper system parameter
-        messages: messages,
-        tools: TOOL_DEFINITIONS, // Enable tool use
-      });
+      let response: Anthropic.Message;
+
+      // Use streaming API if callback provided, otherwise use standard API
+      if (onStream) {
+        const stream = client.messages.stream({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: messages,
+          tools: TOOL_DEFINITIONS,
+        });
+
+        // Stream text chunks to callback as they arrive
+        for await (const chunk of stream) {
+          if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+            onStream(chunk.delta.text);
+          }
+        }
+
+        // Get final complete message
+        response = await stream.finalMessage();
+      } else {
+        // Standard non-streaming API call
+        response = await client.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1024, // Reduced from 2048 for better performance (responses typically 100-300 tokens)
+          system: systemPrompt, // Use proper system parameter
+          messages: messages,
+          tools: TOOL_DEFINITIONS, // Enable tool use
+        });
+      }
 
       const latencyMs = Date.now() - startTime;
 
@@ -184,6 +238,7 @@ export async function processChatMessage(
         );
 
         // Continue the loop to get Claude's final response after tool use
+        // Note: totalIterations already incremented at loop start, will increment again on next iteration
         continue;
       }
 
@@ -270,6 +325,10 @@ export async function processChatMessage(
         });
       }
 
+      // Exponential backoff before retry: 100ms, 200ms, 400ms
+      const delay = Math.min(100 * Math.pow(2, attempt), 1000);
+      await sleep(delay);
+
       // Add the failed response and error feedback to context
       messages.push(
         { role: 'assistant', content: jsonText },
@@ -293,8 +352,11 @@ export async function processChatMessage(
         });
       }
 
-      // For JSON parse errors or API errors, add retry prompt
+      // For JSON parse errors or API errors, add retry prompt with exponential backoff
       if (attempt < maxRetries - 1) {
+        // Exponential backoff before retry: 100ms, 200ms, 400ms
+        const delay = Math.min(100 * Math.pow(2, attempt), 1000);
+        await sleep(delay);
         messages.push({
           role: 'user',
           content: RETRY_PROMPT(lastError),

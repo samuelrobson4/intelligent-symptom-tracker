@@ -19,8 +19,11 @@ const environment = import.meta.env.VITE_ENVIRONMENT || 'development';
 
 let langfuseClient: Langfuse | null = null;
 
-// Only initialize if API keys are provided
-if (langfusePublicKey && langfuseSecretKey) {
+// Check if Langfuse is enabled via environment variable
+const langfuseEnabled = import.meta.env.VITE_LANGFUSE_ENABLED === 'true';
+
+// Only initialize if explicitly enabled AND API keys are provided
+if (langfuseEnabled && langfusePublicKey && langfuseSecretKey) {
   langfuseClient = new Langfuse({
     publicKey: langfusePublicKey,
     secretKey: langfuseSecretKey,
@@ -29,7 +32,11 @@ if (langfusePublicKey && langfuseSecretKey) {
   });
   console.log(`Langfuse initialized for ${environment} environment`);
 } else {
-  console.warn('Langfuse API keys not found. Tracing disabled.');
+  if (!langfuseEnabled) {
+    console.log('Langfuse disabled via VITE_LANGFUSE_ENABLED=false');
+  } else {
+    console.warn('Langfuse API keys not found. Tracing disabled.');
+  }
 }
 
 // Calculate cost for Claude API call

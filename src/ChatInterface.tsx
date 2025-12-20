@@ -20,6 +20,8 @@ import {
   clearDraft,
   isDraftExpired,
   ConversationDraft,
+  getSymptomTodos,
+  completeSymptomTodo,
 } from '@/localStorage';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -47,9 +49,6 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
   const [additionalInsights, setAdditionalInsights] = useState<AdditionalInsights>({});
   const [conversationComplete, setConversationComplete] = useState(false);
 
-  // Multi-symptom queue state
-  const [queuedSymptoms, setQueuedSymptoms] = useState<string[]>([]);
-
   // Draft/resume state
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<ConversationDraft | null>(null);
@@ -64,6 +63,10 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
 
   // Greeting message state
   const [greetingShown, setGreetingShown] = useState(false);
+
+  // Multi-symptom continuation state
+  const [processingTodos, setProcessingTodos] = useState(false);
+  const [currentTodoId, setCurrentTodoId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -110,7 +113,7 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
         messages,
         extractedMetadata,
         additionalInsights,
-        queuedSymptoms,
+        queuedSymptoms: [], // Empty for backwards compatibility
         suggestedIssue,
         issueSelection,
         conversationComplete,
@@ -122,7 +125,6 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
     messages,
     extractedMetadata,
     additionalInsights,
-    queuedSymptoms,
     suggestedIssue,
     issueSelection,
     conversationComplete,
@@ -144,25 +146,30 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
     try {
       // Process the message with conversation context and active issues
       // Filter to only user/assistant messages for conversation history
+      // Keep only last 10 messages (5 turns) to prevent unbounded token growth
       const conversationHistory = newMessages
         .slice(0, -1)
-        .filter(msg => msg.role === 'user' || msg.role === 'assistant') as ConversationMessage[];
+        .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+        .slice(-10) as ConversationMessage[];
+
+      // Use streaming for faster API response (but buffer internally, don't display raw JSON)
+      // We use a no-op callback to enable streaming API path without showing chunks
+      // Check if we're in multi-symptom continuation mode
+      const isMultiSymptomMode = processingTodos && currentTodoId !== null;
 
       const result = await processChatMessage(
         conversationHistory,
         userMessage,
-        issues // Pass active issues for AI to suggest matches
+        issues, // Pass active issues for AI to suggest matches
+        3, // maxRetries
+        () => {}, // Empty callback enables streaming but doesn't display chunks
+        isMultiSymptomMode // Pass flag to enable format enforcement
       );
 
       // Update metadata
       setExtractedMetadata(result.extractedData.metadata);
       setAdditionalInsights(result.additionalInsights);
       setConversationComplete(result.extractedData.conversationComplete || false);
-
-      // Handle multi-symptom queue
-      if (result.extractedData.queuedSymptoms && result.extractedData.queuedSymptoms.length > 0) {
-        setQueuedSymptoms(result.extractedData.queuedSymptoms);
-      }
 
       // Handle AI's issue suggestion
       if (result.extractedData.suggestedIssue) {
@@ -179,7 +186,17 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
         setMessages([...newMessages, { role: 'assistant', content: result.extractedData.aiMessage }]);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      // If we were processing a todo and it failed, keep it for retry
+      if (currentTodoId) {
+        setError(
+          (err instanceof Error ? err.message : 'An error occurred') +
+          ' - The symptom todo remains in the queue. You can try again or ask me to remove it.'
+        );
+        // Keep currentTodoId for potential retry
+      } else {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      }
+
       // Remove the user message that caused the error
       setMessages(messages);
     } finally {
@@ -194,8 +211,6 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
     setExtractedMetadata(null);
     setAdditionalInsights({});
     setConversationComplete(false);
-    // Reset multi-symptom queue
-    setQueuedSymptoms([]);
     // Reset issue state
     setSuggestedIssue(null);
     setIssueSelection(null);
@@ -205,6 +220,10 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
     setGreetingShown(false);
     // Clear draft
     clearDraft();
+    // Reset multi-symptom state
+    setProcessingTodos(false);
+    setCurrentTodoId(null);
+    // Note: Don't clear todos from localStorage - user might want to log them later
   };
 
   const handleResumeDraft = () => {
@@ -214,7 +233,6 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
     setMessages(pendingDraft.messages);
     setExtractedMetadata(pendingDraft.extractedMetadata);
     setAdditionalInsights(pendingDraft.additionalInsights);
-    setQueuedSymptoms(pendingDraft.queuedSymptoms);
     setSuggestedIssue(pendingDraft.suggestedIssue);
     setIssueSelection(pendingDraft.issueSelection);
     setConversationComplete(pendingDraft.conversationComplete);
@@ -340,6 +358,12 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
         // Clear draft after successful save
         clearDraft();
 
+        // If we were processing a todo, mark it complete
+        if (currentTodoId) {
+          completeSymptomTodo(currentTodoId);
+          setCurrentTodoId(null);
+        }
+
         // Notify parent component to refresh tables
         onDataChange?.();
 
@@ -352,117 +376,58 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
             }`
           : '';
 
-        // Check if there are queued symptoms
-        if (queuedSymptoms.length > 0) {
-          const nextSymptom = queuedSymptoms[0];
-          const remainingSymptoms = queuedSymptoms.slice(1);
+        // No queue handling needed - LLM manages via tool
+        setSuccessMessage(`Symptom logged successfully${issueMessage}!`);
 
-          // Show success and ask about next symptom
-          setSuccessMessage(`Symptom logged successfully${issueMessage}!`);
+        // Insert symptom card into messages
+        const symptomCardMessage: ChatMessage = {
+          role: 'system',
+          content: '',
+          type: 'symptom-card',
+          symptomId: symptomId,
+          symptomData: {
+            metadata: extractedMetadata,
+            additionalInsights,
+            issueId: finalIssueId,
+            issueName: issueSelection?.type === 'new'
+              ? issueSelection.newIssueName
+              : issues.find(i => i.id === finalIssueId)?.name
+          }
+        };
 
-          setTimeout(() => {
-            const confirmed = window.confirm(
-              `You also mentioned: "${nextSymptom}"\n\nWould you like to log that symptom now?`
-            );
+        setMessages(prevMessages => [...prevMessages, symptomCardMessage]);
 
-            if (confirmed) {
-              // Reset form but keep conversation going
-              setExtractedMetadata(null);
-              setAdditionalInsights({});
-              setConversationComplete(false);
-              setSuggestedIssue(null);
-              setIssueSelection(null);
-              setError(null);
-              setSuccessMessage(null);
+        // Check for pending symptom todos and add continuation message immediately
+        setTimeout(() => {
+          const todos = getSymptomTodos();
+          if (todos.length > 0 && !processingTodos) {
+            const nextTodo = todos[0];
+            setCurrentTodoId(nextTodo.id);
+            setProcessingTodos(true);
 
-              // Update queue (remove the one we're about to log)
-              setQueuedSymptoms(remainingSymptoms);
+            // Add continuation message right after symptom card
+            const askMessage: ChatMessage = {
+              role: 'assistant',
+              content: `You also mentioned ${nextTodo.symptom}. Would you like to log that now?`,
+              type: 'message'
+            };
 
-              // Continue conversation with queued symptom
-              const userMessage: ChatMessage = { role: 'user', content: nextSymptom };
-              const updatedMessages = [...messages, userMessage];
-              setMessages(updatedMessages);
-              setLoading(true);
+            setMessages(prevMessages => [...prevMessages, askMessage]);
+            setProcessingTodos(false); // Reset to allow user response
+          }
+        }, 100); // Very short delay to let symptom card render
 
-              // Process the queued symptom with conversation history
-              // Filter to only user/assistant messages
-              const conversationHistory = messages.filter(
-                msg => msg.role === 'user' || msg.role === 'assistant'
-              ) as ConversationMessage[];
+        // Clear only metadata states, keep messages visible
+        setExtractedMetadata(null);
+        setAdditionalInsights({});
+        setConversationComplete(false);
+        setSuggestedIssue(null);
+        setIssueSelection(null);
 
-              processChatMessage(conversationHistory, nextSymptom, issues)
-                .then((result) => {
-                  setExtractedMetadata(result.extractedData.metadata);
-                  setAdditionalInsights(result.additionalInsights);
-                  setConversationComplete(result.extractedData.conversationComplete || false);
-
-                  // Handle new queued symptoms from this one
-                  if (result.extractedData.queuedSymptoms && result.extractedData.queuedSymptoms.length > 0) {
-                    setQueuedSymptoms([...remainingSymptoms, ...result.extractedData.queuedSymptoms]);
-                  }
-
-                  // Handle AI's issue suggestion
-                  if (result.extractedData.suggestedIssue) {
-                    setSuggestedIssue(result.extractedData.suggestedIssue);
-                  }
-
-                  // Handle issue selection
-                  if (result.extractedData.issueSelection) {
-                    setIssueSelection(result.extractedData.issueSelection);
-                  }
-
-                  // Add AI response
-                  if (result.extractedData.aiMessage) {
-                    setMessages([...updatedMessages, { role: 'assistant', content: result.extractedData.aiMessage }]);
-                  }
-                })
-                .catch((err) => {
-                  setError(err instanceof Error ? err.message : 'An error occurred');
-                  setMessages([]);
-                })
-                .finally(() => {
-                  setLoading(false);
-                });
-            } else {
-              // User declined, clear queue and reset
-              setQueuedSymptoms([]);
-              handleReset();
-            }
-          }, 500);
-        } else {
-          // No queued symptoms, show card and continue conversation
-          setSuccessMessage(`Symptom logged successfully${issueMessage}!`);
-
-          // Insert symptom card into messages
-          const symptomCardMessage: ChatMessage = {
-            role: 'system',
-            content: '',
-            type: 'symptom-card',
-            symptomId: symptomId,
-            symptomData: {
-              metadata: extractedMetadata,
-              additionalInsights,
-              issueId: finalIssueId,
-              issueName: issueSelection?.type === 'new'
-                ? issueSelection.newIssueName
-                : issues.find(i => i.id === finalIssueId)?.name
-            }
-          };
-
-          setMessages(prevMessages => [...prevMessages, symptomCardMessage]);
-
-          // Clear only metadata states, keep messages visible
-          setExtractedMetadata(null);
-          setAdditionalInsights({});
-          setConversationComplete(false);
-          setSuggestedIssue(null);
-          setIssueSelection(null);
-
-          // Clear success message after 2s
-          setTimeout(() => {
-            setSuccessMessage(null);
-          }, 2000);
-        }
+        // Clear success message after 2s
+        setTimeout(() => {
+          setSuccessMessage(null);
+        }, 2000);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to save symptom');
         setConversationComplete(false); // Allow retry
@@ -532,6 +497,7 @@ export function ChatInterface({ onDataChange }: ChatInterfaceProps = {}) {
             );
           })}
 
+          {/* Loading indicator */}
           {loading && (
             <div className="flex justify-start mb-3">
               <div className="bg-gray-100 rounded-2xl px-3 py-1.5 max-w-[85%] sm:max-w-[80%]">

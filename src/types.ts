@@ -88,7 +88,7 @@ export interface ExtractionResponse {
   aiMessage?: string; // AI's conversational response to the user
   conversationComplete?: boolean; // True when AI has all necessary information
   suggestedIssue?: SuggestedIssue; // AI's suggestion for issue relationship
-  queuedSymptoms?: string[]; // Additional symptoms to log after this one
+  queuedSymptoms?: string[]; // DEPRECATED - use manage_symptom_todos tool instead
   issueSelection?: IssueSelection; // User's issue selection made through conversation
 }
 
@@ -130,6 +130,15 @@ export interface SymptomHistoryToolInput {
   issue_id?: string;
   days_back?: number;
   limit?: number;
+}
+
+// Symptom todo management tool input types
+export type SymptomTodoOperation = 'add' | 'complete' | 'list' | 'remove';
+
+export interface SymptomTodoToolInput {
+  operation: SymptomTodoOperation;
+  symptoms?: string[]; // For 'add' operation
+  todo_id?: string; // For 'complete' or 'remove' operations
 }
 
 // Extended ChatMessage interface for UI rendering
